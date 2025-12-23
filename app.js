@@ -1,9 +1,18 @@
-﻿const { useState, useEffect, useRef } = React;
+﻿const { useState, useEffect, useRef, useMemo } = React;
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
 const TIMER_STATE_KEY = 'deonysus_active_timer_v1';
 const SETTINGS_KEY = 'deonysus_settings_v1';
+
+// 预设颜色盘
+const COLOR_PALETTE = {
+warm: 'bg-warm-100 text-warm-700 border-warm-300',
+blue: 'bg-blue-100 text-blue-700 border-blue-300',
+green: 'bg-sage-100 text-sage-700 border-sage-300',
+rose: 'bg-berry-100 text-berry-700 border-berry-300',
+purple: 'bg-purple-100 text-purple-700 border-purple-300',
+};
 
 const LocalDB = {
 getAll: () => {
@@ -31,16 +40,15 @@ else localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(state));
 },
 getSettings: () => {
 try {
-return JSON.parse(localStorage.getItem(SETTINGS_KEY) || JSON.stringify({
-tags: ['工作', '学习', '阅读', '运动', '发呆']
-}));
-} catch { return { tags: ['工作', '学习', '阅读', '运动'] }; }
+const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+let tags = settings.tags || ['工作', '学习', '阅读', '运动', '发呆'];
+tags = tags.map(t => typeof t === 'string' ? { name: t, color: 'warm' } : t);
+return { tags };
+} catch { return { tags: [{name:'工作',color:'blue'}, {name:'阅读',color:'warm'}] }; }
 },
 saveSettings: (settings) => {
 localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 },
-
-// 智能导入
 importData: (content, type) => {
 try {
 let logsToSave = {};
@@ -49,8 +57,7 @@ const jsonData = JSON.parse(content);
 if (jsonData.logs) logsToSave = jsonData.logs;
 else if (typeof jsonData === 'object') logsToSave = jsonData;
 if (jsonData.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(jsonData.settings));
-}
-else if (type === 'csv') {
+} else if (type === 'csv') {
 const lines = content.split('\n');
 const currentLogs = LocalDB.getAll();
 for (let i = 1; i < lines.length; i++) {
@@ -98,6 +105,10 @@ return `${h}:${m}:${s}`;
 const formatDuration = (seconds) => {
 if (seconds < 60) return `${seconds}s`;
 const m = Math.floor(seconds / 60);
+if (m > 60) {
+const h = (m/60).toFixed(1);
+return `${h}h`;
+}
 return `${m}m`;
 };
 
@@ -137,13 +148,12 @@ const [showResetConfirm, setShowResetConfirm] = useState(false);
 const [toastMsg, setToastMsg] = useState(null);
 const [currentDateStr, setCurrentDateStr] = useState(getShanghaiDate());
 const [settings, setSettings] = useState(LocalDB.getSettings());
-const [lastUpdateTrigger, setLastUpdateTrigger] = useState(0); // 强制刷新触发器
 
 useEffect(() => {
 const nowStr = getShanghaiDate();
 setCurrentDateStr(nowStr);
 setTodayData(LocalDB.getToday(nowStr));
-}, [lastUpdateTrigger]); // 依赖触发器
+}, []);
 
 useEffect(() => {
 if(toastMsg) {
@@ -151,10 +161,6 @@ const timer = setTimeout(() => setToastMsg(null), 2500);
 return () => clearTimeout(timer);
 }
 }, [toastMsg]);
-
-const triggerUpdate = () => {
-setLastUpdateTrigger(Date.now()); // 触发全局更新
-};
 
 const updateHabit = (key, delta) => {
 const currentVal = todayData[key] || 0;
@@ -165,14 +171,12 @@ if (HABIT_CONFIG[key].type === 'count' && newVal > HABIT_CONFIG[key].max) return
 const newData = { ...todayData, [key]: newVal };
 setTodayData(newData);
 LocalDB.updateToday(currentDateStr, newData);
-triggerUpdate();
 };
 
 const addTimeLog = (log) => {
 const newData = { ...todayData, timeLogs: [log, ...(todayData.timeLogs || [])] };
 setTodayData(newData);
 LocalDB.updateToday(currentDateStr, newData);
-triggerUpdate();
 };
 
 const deleteTimeLog = (id) => {
@@ -180,7 +184,6 @@ if(!confirm("要擦掉这条记忆吗？")) return;
 const newData = { ...todayData, timeLogs: todayData.timeLogs.filter(l => l.id !== id) };
 setTodayData(newData);
 LocalDB.updateToday(currentDateStr, newData);
-triggerUpdate();
 };
 
 const confirmReset = () => {
@@ -190,7 +193,6 @@ LocalDB.updateToday(currentDateStr, emptyData);
 LocalDB.saveTimerState(null);
 setShowResetConfirm(false);
 setToastMsg("新的一页开始了");
-triggerUpdate();
 };
 
 const saveNewTag = (newTagName, color) => {
@@ -271,7 +273,7 @@ onAddTag={saveNewTag}
 </button>
 </nav>
 
-{showReport && <ReportModal currentDate={currentDateStr} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} updateTrigger={lastUpdateTrigger} />}
+{showReport && <ReportModal currentDate={currentDateStr} todayData={todayData} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
 
 {showResetConfirm && (
 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -302,16 +304,6 @@ const [selectedColor, setSelectedColor] = useState('warm');
 const [isAddingTag, setIsAddingTag] = useState(false);
 const timerRef = useRef(null);
 
-// 颜色盘
-const COLOR_PALETTE = {
-warm: 'bg-warm-100 text-warm-700 border-warm-300',
-blue: 'bg-blue-100 text-blue-700 border-blue-300',
-green: 'bg-sage-100 text-sage-700 border-sage-300',
-rose: 'bg-berry-100 text-berry-700 border-berry-300',
-purple: 'bg-purple-100 text-purple-700 border-purple-300',
-};
-
-// 初始化
 useEffect(() => {
 const saved = LocalDB.getTimerState();
 if (saved) {
@@ -328,7 +320,6 @@ setStatus(saved.status);
 }
 }, []);
 
-// 唤醒校准
 useEffect(() => {
 const handleVisibilityChange = () => {
 if (document.visibilityState === 'visible') {
@@ -344,7 +335,6 @@ document.addEventListener("visibilitychange", handleVisibilityChange);
 return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
 }, []);
 
-// 计时逻辑
 useEffect(() => {
 if (status === 'running') {
 timerRef.current = setInterval(() => {
@@ -370,7 +360,6 @@ LocalDB.saveTimerState({ status: 'paused', elapsed, lastTick: Date.now(), tag: s
 };
 const handleStop = () => {
 if (elapsed > 5) {
-// 保存 tag 的颜色信息
 onSaveLog({
 id: Date.now(),
 name: selectedTag.name,
@@ -395,13 +384,10 @@ document.getElementById('tag-dialog').close();
 
 return (
 <div className="space-y-6 pt-4">
-
-{/* Timer Display */}
 <div className="relative flex flex-col items-center justify-center py-8">
 <div className={`absolute w-64 h-64 bg-warm-100 rounded-full blur-3xl opacity-50 transition-all duration-1000 ${status === 'running' ? 'scale-110 opacity-70' : 'scale-100'}`}></div>
 <div className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'border-warm-300 animate-breathe' : 'border-warm-100'}`}>
 
-{/* Tag Selector */}
 <div className="mb-4 relative">
 <div
 onClick={() => status === 'idle' && document.getElementById('tag-dialog').showModal()}
@@ -421,7 +407,6 @@ className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
 <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
 </div>
 
-{/* Controls */}
 <div className="flex items-center gap-6 mt-8 relative z-20">
 {status === 'running' ? (
 <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
@@ -434,7 +419,6 @@ className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
 </div>
 </div>
 
-{/* Tag Selection Modal */}
 <dialog id="tag-dialog" className="p-0 rounded-2xl backdrop:bg-ink/20 border-0 shadow-xl m-auto">
 <div className="bg-white p-5 w-80">
 <div className="flex justify-between items-center mb-4">
@@ -484,7 +468,6 @@ disabled={!customTagInput.trim()}
 </div>
 </dialog>
 
-{/* Timeline */}
 <div className="bg-white rounded-3xl p-5 soft-shadow border border-warm-50">
 <div className="flex justify-between items-end px-2 mb-4 border-b border-dashed border-warm-100 pb-2">
 <h3 className="font-bold text-ink">今天的足迹</h3>
@@ -533,15 +516,21 @@ return (
 );
 };
 
-const ReportModal = ({ currentDate, onClose, setToastMsg, updateTrigger }) => {
+// --- ReportModal (V18 - 实时趋势修复版) ---
+const ReportModal = ({ currentDate, todayData, onClose, setToastMsg }) => {
 const [range, setRange] = useState(7);
-const [mode, setMode] = useState('data');
+const [mode, setMode] = useState('data'); // 'data' | 'chart'
 const [stats, setStats] = useState(null);
 const [chartData, setChartData] = useState([]);
 const fileInputRef = useRef(null);
 
+// 关键修复：依赖 todayData，当主界面有更新时，这里也会重新计算
 useEffect(() => {
 const allData = LocalDB.getAll();
+
+// 强制把今日最新的 todayData 合并进去（防止 LocalDB 还没写入导致图表滞后）
+allData[currentDate] = todayData;
+
 const reportDays = [];
 const cData = [];
 
@@ -552,10 +541,11 @@ const dateStr = formatter.format(d);
 const dayData = allData[dateStr] || {};
 reportDays.push({date: dateStr, ...dayData});
 
+// Chart Data Prep
 const focusMin = (dayData.timeLogs || []).reduce((a,c)=>a+c.duration,0)/60;
-const habitScore = ((dayData.water||0)/8 + (dayData.poop||0) + (dayData.spine||0)/2 + (dayData.sleep||0))/4 * 100;
+const habitScore = ((dayData.water||0)/8 + (dayData.poop||0) + (dayData.spine||0)/2 + (dayData.sleep||0))/4 * 100; // 粗略完成度
 cData.push({
-date: dateStr.slice(5),
+date: dateStr.slice(5), // MM-DD
 focus: focusMin,
 habit: Math.min(habitScore, 100)
 });
@@ -566,10 +556,10 @@ reportDays.forEach(d => {
 newStats.water.total += (d.water||0); newStats.poop.total += (d.poop||0); newStats.spine.total += (d.spine||0); newStats.sleep.total += (d.sleep||0); newStats.impulse.total += (d.impulse||0);
 if(d.timeLogs) d.timeLogs.forEach(l => newStats.totalFocusTime += l.duration);
 });
-newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / range).toFixed(1) : 0;
+newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / range).toFixed(1) : 0; // Avg over actual days range
 setStats(newStats);
 setChartData(cData);
-}, [range, updateTrigger]); // 依赖 updateTrigger，实现实时刷新
+}, [range, todayData]); // <-- 关键：监听 todayData
 
 const handleExportCSV = () => {
 const allData = LocalDB.getAll();
@@ -650,6 +640,7 @@ mode === 'data' ? (
 </>
 ) : (
 <div className="space-y-6">
+{/* Focus Time Chart */}
 <div>
 <h3 className="text-xs font-bold text-warm-400 mb-3">⏱️ 专注时长 (小时)</h3>
 <div className="flex items-end justify-between h-32 gap-1">
@@ -668,6 +659,8 @@ return (
 })}
 </div>
 </div>
+
+{/* Habit Completion Chart */}
 <div className="mt-8">
 <h3 className="text-xs font-bold text-warm-400 mb-3">✨ 习惯完成度 (%)</h3>
 <div className="flex items-end justify-between h-32 gap-1">
