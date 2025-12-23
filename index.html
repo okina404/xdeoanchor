@@ -6,24 +6,24 @@
     <title>Deonysus | 守护锚点</title>
     
     <!-- PWA 配置 -->
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="./manifest.json"> <!-- 注意前面的 ./ -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Deonysus">
     
     <!-- 图标引用 -->
-    <link rel="apple-touch-icon" href="icon.png">
-    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="./icon.png"> <!-- 注意前面的 ./ -->
+    <link rel="icon" type="image/png" href="./icon.png"> <!-- 注意前面的 ./ -->
     
     <!-- 样式表 -->
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="./styles.css"> <!-- 🔴 关键修复：加了 ./ -->
     
-    <!-- 核心库 (Staticfile 国内源) -->
+    <!-- 核心库 (Staticfile 国内源 - 保持不变) -->
     <script crossorigin src="https://cdn.staticfile.org/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.staticfile.org/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.staticfile.org/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 🟢 修复关键：引入 Recharts 图表库 -->
+    <!-- Recharts 图表库 -->
     <script crossorigin src="https://cdn.staticfile.org/recharts/2.12.0/Recharts.min.js"></script>
     
     <!-- Tailwind 配置 -->
@@ -64,20 +64,22 @@
 </head>
 <body class="font-rounded selection:bg-warm-200 bg-paper text-ink">
     <div id="root"></div>
+    
     <!-- 错误捕捉 -->
     <script>
         window.onerror = function(message) {
-            // 如果还是出现 Recharts 错误，提示用户
-            if (message.includes('Recharts')) {
-                const root = document.getElementById('root');
-                root.innerHTML = `<div style="padding:20px;color:#E53935;text-align:center"><h3>😟 图表库加载失败</h3><p>可能是网络原因，请尝试刷新页面</p></div>`;
-                return;
-            }
+            // 忽略一些良性的脚本错误
             if (message === 'Script error.') return;
             const root = document.getElementById('root');
-            root.innerHTML = `<div style="padding:20px;color:#E53935;text-align:center"><h3>🤕 启动有点痛...</h3><p>请刷新重试</p><p style="font-size:10px;opacity:0.6">${message}</p></div>`;
+            // 如果页面还没加载出来，显示错误
+            if (!root.hasChildNodes()) {
+                root.innerHTML = `<div style="padding:20px;color:#E53935;text-align:center"><h3>🤕 启动有点痛...</h3><p>请刷新重试</p><p style="font-size:10px;opacity:0.6">${message}</p></div>`;
+            }
         };
     </script>
-    <script type="text/babel" src="app.js"></script>
+
+    <!-- 引入主逻辑 -->
+    <!-- 🔴 关键修复：加了 ./ -->
+    <script type="text/babel" src="./app.js"></script>
 </body>
 </html>
