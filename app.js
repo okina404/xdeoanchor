@@ -1,6 +1,5 @@
-﻿const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
-// 从 Recharts 库中获取组件
-const { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } = Recharts;
+﻿// Version: V20.1 - Comfort View & Live Chart
+const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
@@ -275,6 +274,7 @@ onAddTag={saveNewTag}
 </button>
 </nav>
 
+{/* 这里的 todayData 是关键，必须透传给 Modal */}
 {showReport && <ReportModal currentDate={currentDateStr} todayData={todayData} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
 
 {showResetConfirm && (
@@ -296,7 +296,7 @@ onAddTag={saveNewTag}
 );
 };
 
-// --- 专注计时器 (纯净版) ---
+// --- 专注计时器 (纯净版 - 去除番茄钟) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 const [status, setStatus] = useState('idle');
 const [elapsed, setElapsed] = useState(0);
@@ -389,13 +389,10 @@ document.getElementById('tag-dialog').close();
 
 return (
 <div className="space-y-6 pt-4">
-
-{/* Timer Display */}
 <div className="relative flex flex-col items-center justify-center py-8">
 <div className={`absolute w-64 h-64 bg-warm-100 rounded-full blur-3xl opacity-50 transition-all duration-1000 ${status === 'running' ? 'scale-110 opacity-70' : 'scale-100'}`}></div>
 <div className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'border-warm-300 animate-breathe' : 'border-warm-100'}`}>
 
-{/* Tag Selector */}
 <div className="mb-4 relative">
 <div
 onClick={() => status === 'idle' && document.getElementById('tag-dialog').showModal()}
@@ -415,7 +412,6 @@ className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
 <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
 </div>
 
-{/* Controls */}
 <div className="flex items-center gap-6 mt-8 relative z-20">
 {status === 'running' ? (
 <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
@@ -525,14 +521,14 @@ return (
 );
 };
 
-// --- ReportModal (V21 - 绘本图表版) ---
+// --- ReportModal (V20 - 舒适视野版) ---
 const ReportModal = ({ currentDate, todayData, onClose, setToastMsg }) => {
 const [range, setRange] = useState(7);
 const [mode, setMode] = useState('data');
 const [stats, setStats] = useState(null);
 const [chartData, setChartData] = useState([]);
 const fileInputRef = useRef(null);
-const chartContainerRef = useRef(null);
+const chartContainerRef = useRef(null); // 用于滚动定位
 
 useEffect(() => {
 const allData = LocalDB.getAll();
@@ -549,6 +545,8 @@ const dayData = allData[dateStr] || {};
 reportDays.push({date: dateStr, ...dayData});
 
 const focusMin = (dayData.timeLogs || []).reduce((a,c)=>a+c.duration,0)/60;
+
+// 优化评分逻辑：每项满分1，总分满分100
 const waterScore = Math.min((dayData.water||0)/8, 1);
 const poopScore = Math.min((dayData.poop||0)/1, 1);
 const spineScore = Math.min((dayData.spine||0)/2, 1);
@@ -557,8 +555,8 @@ const habitScore = (waterScore + poopScore + spineScore + sleepScore) / 4 * 100;
 
 cData.push({
 date: dateStr.slice(5),
-focus: parseFloat(focusMin.toFixed(1)),
-habit: Math.round(habitScore)
+focus: focusMin,
+habit: habitScore
 });
 }
 
@@ -572,6 +570,7 @@ setStats(newStats);
 setChartData(cData);
 }, [range, todayData]);
 
+// 每次切换到 Chart 模式，自动滚动到最右边
 useLayoutEffect(() => {
 if (mode === 'chart' && chartContainerRef.current) {
 chartContainerRef.current.scrollLeft = chartContainerRef.current.scrollWidth;
@@ -627,8 +626,8 @@ return (
 <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] animate-[float_4s_ease-in-out_infinite] border-4 border-paper">
 <div className="p-4 border-b-2 border-dashed border-warm-100 flex justify-between items-center bg-paper">
 <div className="flex gap-4">
-<button onClick={() => setMode('data')} className={`text-xl font-bold transition-colors ${mode === 'data' ? 'text-ink' : 'text-warm-300'}`}>数据</button>
-<button onClick={() => setMode('chart')} className={`text-xl font-bold transition-colors ${mode === 'chart' ? 'text-ink' : 'text-warm-300'}`}>趋势</button>
+<button onClick={() => setMode('data')} className={`text-lg font-bold transition-colors ${mode === 'data' ? 'text-ink' : 'text-warm-300'}`}>数据</button>
+<button onClick={() => setMode('chart')} className={`text-lg font-bold transition-colors ${mode === 'chart' ? 'text-ink' : 'text-warm-300'}`}>趋势</button>
 </div>
 <button onClick={onClose} className="p-2 bg-white rounded-full text-warm-300 hover:text-warm-500"><Icons.X /></button>
 </div>
@@ -656,37 +655,42 @@ mode === 'data' ? (
 </div>
 </>
 ) : (
-<div className="space-y-8" ref={chartContainerRef}>
-<div className="overflow-x-auto pb-4 scrollbar-hide">
-<div style={{width: `${Math.max(100, chartData.length * 15)}%`}}>
-<h3 className="text-sm font-bold text-indigo-600 mb-2 sticky left-0">⏱️ 专注时长 (小时)</h3>
-<div className="h-40">
-<ResponsiveContainer width="100%" height="100%">
-<BarChart data={chartData} margin={{top:5, right:5, left:-25, bottom:0}}>
-<CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E0E7FF" />
-<XAxis dataKey="date" tick={{fontSize: 10, fill: '#A5B4FC'}} axisLine={false} tickLine={false} />
-<YAxis tick={{fontSize: 10, fill: '#A5B4FC'}} axisLine={false} tickLine={false} />
-<Tooltip cursor={{fill: '#EEF2FF'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
-<Bar dataKey="focus" fill="#818CF8" radius={[4, 4, 0, 0]} barSize={20} />
-</BarChart>
-</ResponsiveContainer>
+<div className="space-y-6">
+{/* Focus Time Chart (Scrollable) */}
+<div>
+<h3 className="text-xs font-bold text-warm-400 mb-3">⏱️ 专注时长 (小时)</h3>
+<div ref={chartContainerRef} className="overflow-x-auto pb-2 scrollbar-hide">
+<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 10)}%`}}>
+{chartData.map((d, i) => {
+const h = (d.focus / 60);
+const maxH = Math.max(...chartData.map(c => c.focus/60), 1);
+const height = Math.max((h / maxH) * 100, 5);
+return (
+<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[20px]">
+<div className="w-full bg-indigo-100 rounded-t-md relative hover:bg-indigo-200 transition-all" style={{height: `${height}%`}}>
+<div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-indigo-600 text-white px-1 rounded whitespace-nowrap z-10">{h.toFixed(1)}h</div>
+</div>
+<span className="text-[9px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2">{d.date}</span>
+</div>
+)
+})}
 </div>
 </div>
 </div>
 
-<div className="overflow-x-auto pb-4 scrollbar-hide">
-<div style={{width: `${Math.max(100, chartData.length * 15)}%`}}>
-<h3 className="text-sm font-bold text-sage-600 mb-2 sticky left-0">✨ 习惯完成度 (%)</h3>
-<div className="h-40">
-<ResponsiveContainer width="100%" height="100%">
-<LineChart data={chartData} margin={{top:5, right:5, left:-25, bottom:0}}>
-<CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8F5E9" />
-<XAxis dataKey="date" tick={{fontSize: 10, fill: '#A5D6A7'}} axisLine={false} tickLine={false} />
-<YAxis domain={[0, 100]} tick={{fontSize: 10, fill: '#A5D6A7'}} axisLine={false} tickLine={false} />
-<Tooltip cursor={{stroke: '#A5D6A7'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
-<Line type="monotone" dataKey="habit" stroke="#66BB6A" strokeWidth={3} dot={{r: 3, fill:'#66BB6A', strokeWidth:0}} activeDot={{r: 6}} />
-</LineChart>
-</ResponsiveContainer>
+{/* Habit Completion Chart (Scrollable) */}
+<div className="mt-8">
+<h3 className="text-xs font-bold text-warm-400 mb-3">✨ 习惯完成度 (%)</h3>
+<div className="overflow-x-auto pb-2 scrollbar-hide">
+<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 10)}%`}}>
+{chartData.map((d, i) => (
+<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[20px]">
+<div className="w-full bg-sage-100 rounded-t-md relative hover:bg-sage-200 transition-all" style={{height: `${Math.max(d.habit, 5)}%`}}>
+<div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-sage-600 text-white px-1 rounded z-10">{Math.round(d.habit)}%</div>
+</div>
+<span className="text-[9px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2">{d.date}</span>
+</div>
+))}
 </div>
 </div>
 </div>
