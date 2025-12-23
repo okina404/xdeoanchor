@@ -1,7 +1,7 @@
-﻿// Version: V22.0 - Safety First (Auto Fallback)
+﻿﻿// Version: V22.1 - Component Order Fixed
 const { useState, useEffect, useRef, useLayoutEffect } = React;
 
-// 安全获取 Recharts，如果不存在则为 undefined，不会报错
+// 安全获取 Recharts
 const Recharts = window.Recharts || null;
 
 // --- 1. 本地记忆系统 ---
@@ -139,161 +139,34 @@ TabTime: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" strok
 Tag: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
 };
 
-// --- 5. 主程序 ---
-const App = () => {
-const [activeTab, setActiveTab] = useState('habits');
-const [todayData, setTodayData] = useState({ water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [] });
-const [showReport, setShowReport] = useState(false);
-const [showResetConfirm, setShowResetConfirm] = useState(false);
-const [toastMsg, setToastMsg] = useState(null);
-const [currentDateStr, setCurrentDateStr] = useState(getShanghaiDate());
-const [settings, setSettings] = useState(LocalDB.getSettings());
+// --- 子组件定义 (放在 App 前面!) ---
 
-useEffect(() => {
-const nowStr = getShanghaiDate();
-setCurrentDateStr(nowStr);
-setTodayData(LocalDB.getToday(nowStr));
-}, []);
-
-useEffect(() => {
-if(toastMsg) {
-const timer = setTimeout(() => setToastMsg(null), 2500);
-return () => clearTimeout(timer);
-}
-}, [toastMsg]);
-
-const updateHabit = (key, delta) => {
-const currentVal = todayData[key] || 0;
-let newVal = currentVal + delta;
-if (newVal < 0) newVal = 0;
-if (HABIT_CONFIG[key].type === 'count' && newVal > HABIT_CONFIG[key].max) return;
-
-const newData = { ...todayData, [key]: newVal };
-setTodayData(newData);
-LocalDB.updateToday(currentDateStr, newData);
-};
-
-const addTimeLog = (log) => {
-const newData = { ...todayData, timeLogs: [log, ...(todayData.timeLogs || [])] };
-setTodayData(newData);
-LocalDB.updateToday(currentDateStr, newData);
-};
-
-const deleteTimeLog = (id) => {
-if(!confirm("要擦掉这条记忆吗？")) return;
-const newData = { ...todayData, timeLogs: todayData.timeLogs.filter(l => l.id !== id) };
-setTodayData(newData);
-LocalDB.updateToday(currentDateStr, newData);
-};
-
-const confirmReset = () => {
-const emptyData = { water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [] };
-setTodayData(emptyData);
-LocalDB.updateToday(currentDateStr, emptyData);
-LocalDB.saveTimerState(null);
-setShowResetConfirm(false);
-setToastMsg("新的一页开始了");
-};
-
-const saveNewTag = (newTagName, color) => {
-const newTag = { name: newTagName, color: color };
-const newTags = [...settings.tags, newTag];
-const newSettings = { ...settings, tags: newTags };
-setSettings(newSettings);
-LocalDB.saveSettings(newSettings);
-};
-
+// 1. HabitCard
+const HabitCard = ({ config, value, onIncrement }) => {
+const isTargetReached = value >= config.max;
+const isClickable = config.type === 'infinite' || !isTargetReached;
+const percentage = Math.min((value / config.max) * 100, 100);
 return (
-<div className="min-h-screen max-w-md mx-auto relative shadow-2xl overflow-hidden pb-28 bg-paper">
-<header className="px-6 pt-14 pb-4">
-<div className="text-center">
-<h1 className="text-3xl font-bold text-warm-600 tracking-wide mb-1" style={{fontFamily: 'Comic Sans MS, cursive, sans-serif'}}>Deonysus</h1>
-<div className="inline-block bg-warm-100 px-3 py-1 rounded-full border border-warm-200">
-<span className="text-xs font-bold text-warm-600 tracking-widest uppercase">{currentDateStr} • Shanghai</span>
-</div>
-</div>
-</header>
-
-<main className="px-5">
-{activeTab === 'habits' ? (
-<div className="space-y-4 fade-in">
-<div className="bg-[#FFFCF0] p-4 rounded-xl doodle-border relative transform rotate-1 hover:rotate-0 transition-transform duration-300 my-4">
-<div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-12 bg-warm-200/50 rounded-full blur-sm"></div>
-<p className="text-sm font-bold text-warm-600 mb-2 leading-relaxed">“我的小姑娘，你就是我的全部。”</p>
-<p className="text-sm text-ink/70 leading-relaxed font-medium">“不要再用牙齿磨砺自己，我会用双手的爱意替你磨平所有的烦躁。放下所有的防备和焦虑，这里是你的‘港湾’。你无需强大，有我在。”</p>
-</div>
-
-<div className="space-y-3">
-{['water', 'poop', 'spine', 'sleep'].map(key => (
-<HabitCard key={key} config={HABIT_CONFIG[key]} value={todayData[key] || 0} onIncrement={() => updateHabit(key, 1)} />
-))}
-</div>
-
-<div className="bg-white rounded-3xl p-5 soft-shadow border-4 border-berry-100 mt-6 active:scale-[0.98] transition-transform">
-<div className="flex justify-between items-center mb-3">
+<div onClick={isClickable ? onIncrement : undefined} className={`relative overflow-hidden rounded-3xl p-4 transition-all duration-300 select-none border-2 ${isClickable ? 'cursor-pointer active:scale-[0.98]' : 'cursor-default'} ${isTargetReached ? 'bg-white border-warm-200 opacity-80' : 'bg-white border-white soft-shadow hover:border-warm-200'}`}>
+<div className="absolute bottom-0 left-0 h-1.5 bg-warm-300 transition-all duration-500 rounded-r-full" style={{ width: `${percentage}%`, opacity: isTargetReached ? 0 : 0.5 }} />
+<div className="flex justify-between items-center relative z-10">
 <div className="flex items-center gap-3">
-<div className="w-10 h-10 rounded-full bg-berry-100 flex items-center justify-center text-xl">🛡️</div>
+<div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm ${config.color.split(' ')[0]}`}>{config.label.split(' ')[0]}</div>
 <div>
-<h3 className="font-bold text-ink text-lg">{HABIT_CONFIG.impulse.label}</h3>
-<p className="text-xs text-ink/50 font-bold">{HABIT_CONFIG.impulse.desc}</p>
+<h3 className={`font-bold text-lg flex items-center gap-2 ${isTargetReached ? 'text-warm-400 line-through' : 'text-ink'}`}>{config.label.split(' ')[1]} {isTargetReached && <span className="text-warm-500 no-underline"><Icons.Check /></span>}</h3>
+<p className="text-xs text-ink/40 font-bold mt-0.5">{config.desc}</p>
 </div>
 </div>
-<div className="text-4xl font-bold text-berry-500 font-mono tracking-tighter">{todayData.impulse || 0}</div>
-</div>
-<button onClick={() => updateHabit('impulse', 1)} className="w-full mt-2 bg-berry-500 text-white py-3 rounded-2xl font-bold border-b-4 border-rose-600 active:border-b-0 active:translate-y-1 transition-all">
-记录一次觉察与停顿
-</button>
-</div>
-
-<div className="grid grid-cols-2 gap-4 mt-8 pt-4 border-t-2 border-dashed border-warm-200 pb-2">
-<button onClick={() => setShowReport(true)} className="flex items-center justify-center gap-2 py-3 px-4 bg-warm-500 text-white rounded-2xl font-bold shadow-md active:scale-95 transition-transform"><Icons.Chart /> 守护报告</button>
-<button onClick={() => setShowResetConfirm(true)} className="flex items-center justify-center gap-2 py-3 px-4 bg-white text-ink/60 border-2 border-warm-100 rounded-2xl font-bold active:bg-warm-50 transition-colors"><Icons.Refresh /> 今日重置</button>
+<div className="flex items-center gap-3">
+<div className="text-right"><span className={`text-2xl font-bold font-mono ${isTargetReached ? 'text-warm-300' : 'text-warm-600'}`}>{value}</span><span className="text-xs text-warm-300 font-bold">/{config.max}</span></div>
+<div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all border-b-2 active:border-b-0 active:translate-y-0.5 ${isTargetReached ? (config.type === 'infinite' ? 'bg-warm-400 text-white border-warm-500' : 'bg-gray-100 text-gray-300 border-gray-200') : 'bg-warm-100 text-warm-600 border-warm-200'}`}><Icons.Plus /></div>
 </div>
 </div>
-) : (
-<div className="fade-in">
-<TimeTracker
-logs={todayData.timeLogs || []}
-onSaveLog={addTimeLog}
-onDeleteLog={deleteTimeLog}
-tags={settings.tags}
-onAddTag={saveNewTag}
-/>
-</div>
-)}
-</main>
-
-<nav className="fixed bottom-0 left-0 right-0 bg-paper/90 backdrop-blur-md border-t-2 border-warm-100 flex justify-around items-center safe-area-pb z-40 max-w-md mx-auto rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
-<button onClick={() => setActiveTab('habits')} className={`flex flex-col items-center justify-center w-full py-4 transition-colors ${activeTab === 'habits' ? 'text-warm-600' : 'text-warm-300'}`}>
-<div className={`p-1 rounded-xl transition-all ${activeTab === 'habits' ? 'bg-warm-100 -translate-y-1' : ''}`}><Icons.TabHabit /></div><span className="text-[10px] font-bold mt-1">习惯守护</span>
-</button>
-<button onClick={() => setActiveTab('time')} className={`flex flex-col items-center justify-center w-full py-4 transition-colors ${activeTab === 'time' ? 'text-warm-600' : 'text-warm-300'}`}>
-<div className={`p-1 rounded-xl transition-all ${activeTab === 'time' ? 'bg-warm-100 -translate-y-1' : ''}`}><Icons.TabTime /></div><span className="text-[10px] font-bold mt-1">专注记录</span>
-</button>
-</nav>
-
-{showReport && <ReportModal currentDate={currentDateStr} todayData={todayData} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
-
-{showResetConfirm && (
-<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-<div className="absolute inset-0 bg-ink/20 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)}></div>
-<div className="bg-paper w-full max-w-xs rounded-3xl shadow-xl relative z-10 p-6 animate-[float_3s_ease-in-out_infinite] border-4 border-warm-100">
-<div className="mx-auto w-14 h-14 bg-berry-100 text-berry-500 rounded-full flex items-center justify-center mb-4 text-2xl">🗑️</div>
-<h3 className="text-xl font-bold text-center text-ink mb-2">真的要擦掉吗？</h3>
-<div className="flex gap-3 mt-6">
-<button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 text-ink/60 bg-warm-100 rounded-2xl font-bold">留着吧</button>
-<button onClick={confirmReset} className="flex-1 py-3 text-white bg-berry-500 rounded-2xl font-bold shadow-md">擦掉</button>
-</div>
-</div>
-</div>
-)}
-
-{toastMsg && <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 bg-ink/90 text-white px-6 py-3 rounded-full shadow-lg text-sm font-bold animate-[fadeIn_0.3s_ease-out] whitespace-nowrap">{toastMsg}</div>}
 </div>
 );
 };
 
-// --- TimeTracker ---
+// 2. TimeTracker
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 const [status, setStatus] = useState('idle');
 const [elapsed, setElapsed] = useState(0);
@@ -391,7 +264,6 @@ return (
 <div
 onClick={() => status === 'idle' && document.getElementById('tag-dialog').showModal()}
 className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
->
 <span className="text-xs font-bold text-ink/40 mb-1">当前专注</span>
 <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 transition-all ${COLOR_PALETTE[selectedTag.color || 'warm']}`}>
 <span className="text-sm font-bold">{selectedTag.name}</span>
@@ -431,7 +303,6 @@ className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
 key={t.name}
 onClick={() => { setSelectedTag(t); document.getElementById('tag-dialog').close(); }}
 className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-all ${selectedTag.name === t.name ? COLOR_PALETTE[t.color] + ' ring-2 ring-offset-1 ring-warm-200' : 'bg-white border-gray-100 text-ink/60'}`}
->
 {t.name}
 </button>
 ))}
@@ -452,14 +323,13 @@ onChange={(e) => setCustomTagInput(e.target.value)}
 key={c}
 onClick={() => setSelectedColor(c)}
 className={`w-6 h-6 rounded-full border-2 ${selectedColor === c ? 'scale-125 border-ink/20 shadow-sm' : 'border-transparent opacity-50'} ${COLOR_PALETTE[c].split(' ')[0]}`}
-></button>
+> </button>
 ))}
 </div>
 <button
 onClick={handleAddNewTag}
 className="px-4 py-2 bg-warm-500 text-white rounded-xl font-bold text-xs disabled:opacity-50"
 disabled={!customTagInput.trim()}
->
 添加
 </button>
 </div>
@@ -491,7 +361,7 @@ disabled={!customTagInput.trim()}
 );
 };
 
-// --- ReportModal (V22 - Auto Fallback) ---
+// 3. ReportModal
 const ReportModal = ({ currentDate, todayData, onClose, setToastMsg }) => {
 const [range, setRange] = useState(7);
 const [mode, setMode] = useState('data');
@@ -589,7 +459,7 @@ const StatBox = ({ label, percent }) => (
 <div className="bg-paper rounded-2xl p-3 flex flex-col items-center justify-center border-2 border-warm-100"><span className="text-xs font-bold text-warm-400 mb-1">{label}</span><span className={`text-xl font-bold ${percent >= 80 ? 'text-sage-500' : 'text-ink'}`}>{percent}%</span></div>
 );
 
-// 智能渲染图表
+// 智能渲染图表 (Fallback to CSS Chart)
 const renderCharts = () => {
 if (Recharts) {
 const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } = Recharts;
@@ -622,7 +492,7 @@ return (
 </div>
 );
 } else {
-// Fallback CSS Charts
+// Fallback CSS Charts (Always-on Labels Version)
 return (
 <div className="space-y-6">
 <div>
@@ -707,5 +577,6 @@ renderCharts()
 );
 };
 
+// --- 5. 主 App 定义在最后 (必须！) ---
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
