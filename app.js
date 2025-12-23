@@ -1,6 +1,5 @@
-﻿const { useState, useEffect, useRef, useLayoutEffect } = React;
-// 从全局对象获取 Recharts 组件
-const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } = window.Recharts || {};
+﻿﻿// Version: V21.0 - Always-on Chart Labels
+const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
@@ -205,7 +204,6 @@ LocalDB.saveSettings(newSettings);
 
 return (
 <div className="min-h-screen max-w-md mx-auto relative shadow-2xl overflow-hidden pb-28 bg-paper">
-
 <header className="px-6 pt-14 pb-4">
 <div className="text-center">
 <h1 className="text-3xl font-bold text-warm-600 tracking-wide mb-1" style={{fontFamily: 'Comic Sans MS, cursive, sans-serif'}}>Deonysus</h1>
@@ -294,7 +292,6 @@ onAddTag={saveNewTag}
 );
 };
 
-// --- TimeTracker ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 const [status, setStatus] = useState('idle');
 const [elapsed, setElapsed] = useState(0);
@@ -304,7 +301,6 @@ const [selectedColor, setSelectedColor] = useState('warm');
 const [isAddingTag, setIsAddingTag] = useState(false);
 const timerRef = useRef(null);
 
-// 初始化
 useEffect(() => {
 const saved = LocalDB.getTimerState();
 if (saved) {
@@ -321,7 +317,6 @@ setStatus(saved.status);
 }
 }, []);
 
-// 唤醒校准
 useEffect(() => {
 const handleVisibilityChange = () => {
 if (document.visibilityState === 'visible') {
@@ -337,7 +332,6 @@ document.addEventListener("visibilitychange", handleVisibilityChange);
 return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
 }, []);
 
-// 计时逻辑
 useEffect(() => {
 if (status === 'running') {
 timerRef.current = setInterval(() => {
@@ -395,7 +389,6 @@ return (
 <div
 onClick={() => status === 'idle' && document.getElementById('tag-dialog').showModal()}
 className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
->
 <span className="text-xs font-bold text-ink/40 mb-1">当前专注</span>
 <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 transition-all ${COLOR_PALETTE[selectedTag.color || 'warm']}`}>
 <span className="text-sm font-bold">{selectedTag.name}</span>
@@ -435,7 +428,6 @@ className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
 key={t.name}
 onClick={() => { setSelectedTag(t); document.getElementById('tag-dialog').close(); }}
 className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-all ${selectedTag.name === t.name ? COLOR_PALETTE[t.color] + ' ring-2 ring-offset-1 ring-warm-200' : 'bg-white border-gray-100 text-ink/60'}`}
->
 {t.name}
 </button>
 ))}
@@ -456,14 +448,13 @@ onChange={(e) => setCustomTagInput(e.target.value)}
 key={c}
 onClick={() => setSelectedColor(c)}
 className={`w-6 h-6 rounded-full border-2 ${selectedColor === c ? 'scale-125 border-ink/20 shadow-sm' : 'border-transparent opacity-50'} ${COLOR_PALETTE[c].split(' ')[0]}`}
-></button>
+> </button>
 ))}
 </div>
 <button
 onClick={handleAddNewTag}
 className="px-4 py-2 bg-warm-500 text-white rounded-xl font-bold text-xs disabled:opacity-50"
 disabled={!customTagInput.trim()}
->
 添加
 </button>
 </div>
@@ -543,7 +534,6 @@ reportDays.push({date: dateStr, ...dayData});
 
 const focusMin = (dayData.timeLogs || []).reduce((a,c)=>a+c.duration,0)/60;
 
-// 优化评分逻辑：每项满分1，总分满分100
 const waterScore = Math.min((dayData.water||0)/8, 1);
 const poopScore = Math.min((dayData.poop||0)/1, 1);
 const spineScore = Math.min((dayData.spine||0)/2, 1);
@@ -630,7 +620,7 @@ return (
 
 <div className="flex p-2 bg-paper mx-4 mt-4 rounded-xl border border-warm-100">
 {[7, 30].map(r => (
-<button key={r} onClick={() => setRange(r)} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>
+<button key={r} onClick={() => setRange(r)} className={`flex-1 py-3 text-lg font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>
 ))}
 </div>
 
@@ -652,80 +642,46 @@ mode === 'data' ? (
 </>
 ) : (
 <div className="space-y-6">
-{/* Use Recharts if available, else fallback to CSS Chart */}
-{window.Recharts ? (
-<div className="space-y-6">
-<div style={{ width: '100%', height: 200 }}>
-<h3 className="text-xs font-bold text-warm-400 mb-2">⏱️ 专注时长 (小时)</h3>
-<ResponsiveContainer>
-<BarChart data={chartData.map(d => ({...d, focus: parseFloat((d.focus/60).toFixed(1))}))}>
-<CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E0D8C0" />
-<XAxis dataKey="date" tick={{fontSize: 10, fill: '#9CA3AF'}} axisLine={false} tickLine={false} />
-<YAxis hide />
-<Tooltip
-cursor={{fill: '#FDF6E3'}}
-contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
-/>
-<Bar dataKey="focus" fill="#818CF8" radius={[4, 4, 0, 0]} barSize={20} />
-</BarChart>
-</ResponsiveContainer>
-</div>
-<div style={{ width: '100%', height: 200 }}>
-<h3 className="text-xs font-bold text-warm-400 mb-2">✨ 习惯完成度 (%)</h3>
-<ResponsiveContainer>
-<BarChart data={chartData}>
-<CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E0D8C0" />
-<XAxis dataKey="date" tick={{fontSize: 10, fill: '#9CA3AF'}} axisLine={false} tickLine={false} />
-<YAxis hide domain={[0, 100]} />
-<Tooltip
-cursor={{fill: '#FDF6E3'}}
-contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
-/>
-<Bar dataKey="habit" fill="#81C784" radius={[4, 4, 0, 0]} barSize={20} />
-</BarChart>
-</ResponsiveContainer>
-</div>
-</div>
-) : (
-// Fallback to CSS Chart if Recharts fails
-<div className="space-y-6">
+{/* Simple CSS Chart for Focus Time (V21 - Always-on Labels) */}
 <div>
 <h3 className="text-xs font-bold text-warm-400 mb-3">⏱️ 专注时长 (小时)</h3>
-<div ref={chartContainerRef} className="overflow-x-auto pb-2 scrollbar-hide">
-<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 10)}%`}}>
+<div ref={chartContainerRef} className="overflow-x-auto pb-4 scrollbar-hide">
+<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 12)}%`}}>
 {chartData.map((d, i) => {
 const h = (d.focus / 60);
 const maxH = Math.max(...chartData.map(c => c.focus/60), 1);
-const height = Math.max((h / maxH) * 100, 5);
+const height = Math.max((h / maxH) * 100, 10); // Min height ensures label space
 return (
 <div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[30px]">
+{/* Label always visible */}
+<div className="text-[10px] font-bold text-indigo-500 mb-1">{h > 0 ? h.toFixed(1) : ''}</div>
 <div className="w-full bg-indigo-100 rounded-t-md relative hover:bg-indigo-200 transition-all" style={{height: `${height}%`}}>
-<div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-indigo-600 text-white px-1 rounded whitespace-nowrap z-10">{h.toFixed(1)}h</div>
 </div>
-<span className="text-[10px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
+<span className="text-[10px] text-warm-400 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
 </div>
 )
 })}
 </div>
 </div>
 </div>
+
+{/* Simple CSS Chart for Habit Completion (V21 - Always-on Labels) */}
 <div className="mt-8">
 <h3 className="text-xs font-bold text-warm-400 mb-3">✨ 习惯完成度 (%)</h3>
-<div className="overflow-x-auto pb-2 scrollbar-hide">
-<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 10)}%`}}>
+<div className="overflow-x-auto pb-4 scrollbar-hide">
+<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 12)}%`}}>
 {chartData.map((d, i) => (
 <div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[30px]">
-<div className="w-full bg-sage-100 rounded-t-md relative hover:bg-sage-200 transition-all" style={{height: `${Math.max(d.habit, 5)}%`}}>
-<div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-sage-600 text-white px-1 rounded z-10">{Math.round(d.habit)}%</div>
+{/* Label always visible */}
+<div className="text-[10px] font-bold text-sage-600 mb-1">{d.habit > 0 ? Math.round(d.habit) : ''}</div>
+<div className="w-full bg-sage-100 rounded-t-md relative hover:bg-sage-200 transition-all" style={{height: `${Math.max(d.habit, 10)}%`}}>
 </div>
-<span className="text-[10px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
+<span className="text-[10px] text-warm-400 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
 </div>
 ))}
 </div>
 </div>
 </div>
-</div>
-)}
 </div>
 )
 )}
