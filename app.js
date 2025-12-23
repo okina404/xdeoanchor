@@ -399,6 +399,7 @@ placeholder="新标签"
 <div
 onClick={() => status === 'idle' && setIsAddingTag(false)}
 className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2"
+>
 <span className="text-xs font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
 <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={() => document.getElementById('tag-dialog').showModal()}>
 <span className="text-sm font-bold text-ink">{selectedTag}</span>
@@ -437,6 +438,7 @@ className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2"
 key={t}
 onClick={() => { setSelectedTag(t); document.getElementById('tag-dialog').close(); }}
 className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 ${selectedTag === t ? 'bg-warm-100 border-warm-400 text-warm-700' : 'bg-white border-warm-100 text-ink/60'}`}
+>
 {t}
 </button>
 ))}
