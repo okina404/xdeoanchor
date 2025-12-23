@@ -1,5 +1,6 @@
-﻿// Version: V20.1 - Comfort View & Live Chart
-const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
+﻿const { useState, useEffect, useRef, useLayoutEffect } = React;
+// 从全局对象获取 Recharts 组件
+const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } = window.Recharts || {};
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
@@ -113,7 +114,6 @@ return `${h}h`;
 return `${m}m`;
 };
 
-// --- 3. 习惯配置 ---
 const HABIT_CONFIG = {
 water: { label: "💧 饮水守护", max: 8, desc: "≥300ml 对抗结石", type: "infinite", color: "bg-blue-100 text-blue-600" },
 poop: { label: "💩 顺畅守护", max: 1, desc: "身体净化完成", type: "count", color: "bg-amber-100 text-amber-700" },
@@ -122,7 +122,6 @@ sleep: { label: "🌙 睡前锚点", max: 1, desc: "23:00 前开始仪式", type
 impulse: { label: "🧠 冲动记录", max: 999, desc: "护甲：觉察与停顿", type: "infinite", color: "bg-rose-100 text-rose-600" }
 };
 
-// --- 4. 图标 ---
 const Icons = {
 Chart: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
 Refresh: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,
@@ -274,7 +273,6 @@ onAddTag={saveNewTag}
 </button>
 </nav>
 
-{/* 这里的 todayData 是关键，必须透传给 Modal */}
 {showReport && <ReportModal currentDate={currentDateStr} todayData={todayData} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
 
 {showResetConfirm && (
@@ -296,7 +294,7 @@ onAddTag={saveNewTag}
 );
 };
 
-// --- 专注计时器 (纯净版 - 去除番茄钟) ---
+// --- TimeTracker ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 const [status, setStatus] = useState('idle');
 const [elapsed, setElapsed] = useState(0);
@@ -521,14 +519,13 @@ return (
 );
 };
 
-// --- ReportModal (V20 - 舒适视野版) ---
 const ReportModal = ({ currentDate, todayData, onClose, setToastMsg }) => {
 const [range, setRange] = useState(7);
 const [mode, setMode] = useState('data');
 const [stats, setStats] = useState(null);
 const [chartData, setChartData] = useState([]);
 const fileInputRef = useRef(null);
-const chartContainerRef = useRef(null); // 用于滚动定位
+const chartContainerRef = useRef(null);
 
 useEffect(() => {
 const allData = LocalDB.getAll();
@@ -570,7 +567,6 @@ setStats(newStats);
 setChartData(cData);
 }, [range, todayData]);
 
-// 每次切换到 Chart 模式，自动滚动到最右边
 useLayoutEffect(() => {
 if (mode === 'chart' && chartContainerRef.current) {
 chartContainerRef.current.scrollLeft = chartContainerRef.current.scrollWidth;
@@ -656,7 +652,43 @@ mode === 'data' ? (
 </>
 ) : (
 <div className="space-y-6">
-{/* Focus Time Chart (Scrollable) */}
+{/* Use Recharts if available, else fallback to CSS Chart */}
+{window.Recharts ? (
+<div className="space-y-6">
+<div style={{ width: '100%', height: 200 }}>
+<h3 className="text-xs font-bold text-warm-400 mb-2">⏱️ 专注时长 (小时)</h3>
+<ResponsiveContainer>
+<BarChart data={chartData.map(d => ({...d, focus: parseFloat((d.focus/60).toFixed(1))}))}>
+<CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E0D8C0" />
+<XAxis dataKey="date" tick={{fontSize: 10, fill: '#9CA3AF'}} axisLine={false} tickLine={false} />
+<YAxis hide />
+<Tooltip
+cursor={{fill: '#FDF6E3'}}
+contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
+/>
+<Bar dataKey="focus" fill="#818CF8" radius={[4, 4, 0, 0]} barSize={20} />
+</BarChart>
+</ResponsiveContainer>
+</div>
+<div style={{ width: '100%', height: 200 }}>
+<h3 className="text-xs font-bold text-warm-400 mb-2">✨ 习惯完成度 (%)</h3>
+<ResponsiveContainer>
+<BarChart data={chartData}>
+<CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E0D8C0" />
+<XAxis dataKey="date" tick={{fontSize: 10, fill: '#9CA3AF'}} axisLine={false} tickLine={false} />
+<YAxis hide domain={[0, 100]} />
+<Tooltip
+cursor={{fill: '#FDF6E3'}}
+contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
+/>
+<Bar dataKey="habit" fill="#81C784" radius={[4, 4, 0, 0]} barSize={20} />
+</BarChart>
+</ResponsiveContainer>
+</div>
+</div>
+) : (
+// Fallback to CSS Chart if Recharts fails
+<div className="space-y-6">
 <div>
 <h3 className="text-xs font-bold text-warm-400 mb-3">⏱️ 专注时长 (小时)</h3>
 <div ref={chartContainerRef} className="overflow-x-auto pb-2 scrollbar-hide">
@@ -666,34 +698,34 @@ const h = (d.focus / 60);
 const maxH = Math.max(...chartData.map(c => c.focus/60), 1);
 const height = Math.max((h / maxH) * 100, 5);
 return (
-<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[20px]">
+<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[30px]">
 <div className="w-full bg-indigo-100 rounded-t-md relative hover:bg-indigo-200 transition-all" style={{height: `${height}%`}}>
 <div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-indigo-600 text-white px-1 rounded whitespace-nowrap z-10">{h.toFixed(1)}h</div>
 </div>
-<span className="text-[9px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2">{d.date}</span>
+<span className="text-[10px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
 </div>
 )
 })}
 </div>
 </div>
 </div>
-
-{/* Habit Completion Chart (Scrollable) */}
 <div className="mt-8">
 <h3 className="text-xs font-bold text-warm-400 mb-3">✨ 习惯完成度 (%)</h3>
 <div className="overflow-x-auto pb-2 scrollbar-hide">
 <div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 10)}%`}}>
 {chartData.map((d, i) => (
-<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[20px]">
+<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[30px]">
 <div className="w-full bg-sage-100 rounded-t-md relative hover:bg-sage-200 transition-all" style={{height: `${Math.max(d.habit, 5)}%`}}>
 <div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-sage-600 text-white px-1 rounded z-10">{Math.round(d.habit)}%</div>
 </div>
-<span className="text-[9px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2">{d.date}</span>
+<span className="text-[10px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
 </div>
 ))}
 </div>
 </div>
 </div>
+</div>
+)}
 </div>
 )
 )}

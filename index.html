@@ -22,9 +22,9 @@
     <script crossorigin src="https://cdn.staticfile.org/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.staticfile.org/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.staticfile.org/babel-standalone/7.23.5/babel.min.js"></script>
-    <!-- 新增：Recharts 图表库 -->
-    <script src="https://cdn.staticfile.org/recharts/2.10.3/Recharts.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 🟢 修复关键：引入 Recharts 图表库 -->
+    <script crossorigin src="https://cdn.staticfile.org/recharts/2.12.0/Recharts.min.js"></script>
     
     <!-- Tailwind 配置 -->
     <script>
@@ -64,8 +64,15 @@
 </head>
 <body class="font-rounded selection:bg-warm-200 bg-paper text-ink">
     <div id="root"></div>
+    <!-- 错误捕捉 -->
     <script>
         window.onerror = function(message) {
+            // 如果还是出现 Recharts 错误，提示用户
+            if (message.includes('Recharts')) {
+                const root = document.getElementById('root');
+                root.innerHTML = `<div style="padding:20px;color:#E53935;text-align:center"><h3>😟 图表库加载失败</h3><p>可能是网络原因，请尝试刷新页面</p></div>`;
+                return;
+            }
             if (message === 'Script error.') return;
             const root = document.getElementById('root');
             root.innerHTML = `<div style="padding:20px;color:#E53935;text-align:center"><h3>🤕 启动有点痛...</h3><p>请刷新重试</p><p style="font-size:10px;opacity:0.6">${message}</p></div>`;
