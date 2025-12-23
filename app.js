@@ -1,6 +1,6 @@
 const { useState, useEffect, useRef } = React;
 
-// --- 1. 本地记忆系统 (保持 V15.1 的兼容性) ---
+// --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
 const TIMER_STATE_KEY = 'deonysus_active_timer_v1';
 const SETTINGS_KEY = 'deonysus_settings_v1';
@@ -42,7 +42,6 @@ const LocalDB = {
     // 智能导入
     importData: (fileContent) => {
         try {
-            // JSON
             const jsonData = JSON.parse(fileContent);
             if (jsonData.logs) {
                 const current = LocalDB.getAll();
@@ -54,7 +53,6 @@ const LocalDB = {
         } catch (e) {}
 
         try {
-            // CSV
             const lines = fileContent.split('\n');
             let successCount = 0;
             const currentData = LocalDB.getAll();
@@ -138,7 +136,9 @@ const Icons = {
     TabTime: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
     Tag: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
     Left: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
-    Right: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    Right: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
+    Calendar: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+    List: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
 };
 
 // --- 5. 主程序 ---
@@ -295,6 +295,7 @@ const App = () => {
     );
 };
 
+// --- 专注计时器 (纯净版) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     const [status, setStatus] = useState('idle');
     const [elapsed, setElapsed] = useState(0);
@@ -498,27 +499,26 @@ const HabitCard = ({ config, value, onIncrement }) => {
     );
 };
 
-// --- V16 更新: 热力日历组件 ---
+// --- V17 更新: 双模式报表组件 ---
 const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'stats'
-    const [selectedDateData, setSelectedDateData] = useState(null); // 点击某天显示详情
-    const [calendarMonth, setCalendarMonth] = useState(new Date()); // 当前显示的月份
+    const [selectedDateData, setSelectedDateData] = useState(null);
+    const [calendarMonth, setCalendarMonth] = useState(new Date());
+    const [range, setRange] = useState(7); // 统计模式用的天数
+    const [stats, setStats] = useState(null); // 统计模式用的数据
     const fileInputRef = useRef(null);
 
-    // 计算日历数据
     const allData = LocalDB.getAll();
+
+    // --- 月历模式逻辑 ---
     const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
-    const firstDayOfWeek = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay(); // 0 is Sunday
-    
-    // 生成日历格子
+    const firstDayOfWeek = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay();
     const calendarDays = [];
-    for (let i = 0; i < firstDayOfWeek; i++) calendarDays.push(null); // 填充空白
+    for (let i = 0; i < firstDayOfWeek; i++) calendarDays.push(null);
     for (let i = 1; i <= daysInMonth; i++) {
         const dateStr = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth()+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
         calendarDays.push({ day: i, dateStr, data: allData[dateStr] });
     }
-
-    // 计算热力等级 (0-4)
     const getHeatLevel = (data) => {
         if (!data) return 0;
         let score = 0;
@@ -526,26 +526,40 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
         if (data.poop >= 1) score++;
         if (data.spine >= 2) score++;
         if (data.sleep >= 1) score++;
-        // 专注时长每 30 分钟算 0.5 分，最高 1 分
         const focusMin = (data.timeLogs || []).reduce((a,c)=>a+c.duration,0) / 60;
         if (focusMin >= 60) score++;
-        
-        return Math.min(score, 4); // Max level 4
+        return Math.min(score, 4);
     };
-
     const handleMonthChange = (delta) => {
         const newDate = new Date(calendarMonth);
         newDate.setMonth(newDate.getMonth() + delta);
         setCalendarMonth(newDate);
         setSelectedDateData(null);
     };
+    const handleDayClick = (dayData) => { if (dayData) setSelectedDateData(dayData); };
 
-    const handleDayClick = (dayData) => {
-        if (dayData) setSelectedDateData(dayData);
-    };
+    // --- 统计模式逻辑 ---
+    useEffect(() => {
+        if (viewMode === 'stats') {
+            const reportDays = [];
+            for (let i = 0; i < range; i++) {
+                const d = new Date(); d.setDate(d.getDate() - i);
+                const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
+                const dateStr = formatter.format(d);
+                if (allData[dateStr]) reportDays.push(allData[dateStr]);
+            }
+            const newStats = { days: reportDays.length, water: {total:0,target:range*8}, poop:{total:0,target:range}, spine:{total:0,target:range*2}, sleep:{total:0,target:range}, impulse:{total:0,avg:0}, totalFocusTime:0 };
+            reportDays.forEach(d => {
+                newStats.water.total += (d.water||0); newStats.poop.total += (d.poop||0); newStats.spine.total += (d.spine||0); newStats.sleep.total += (d.sleep||0); newStats.impulse.total += (d.impulse||0);
+                if(d.timeLogs) d.timeLogs.forEach(l => newStats.totalFocusTime += l.duration);
+            });
+            newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / reportDays.length).toFixed(1) : 0;
+            setStats(newStats);
+        }
+    }, [viewMode, range]);
 
+    // --- 通用数据处理 ---
     const handleExportCSV = () => {
-        const allData = LocalDB.getAll();
         let csvContent = "\uFEFF日期,饮水,顺畅,脊柱,睡眠,冲动记录,总专注(分),详情\n";
         Object.keys(allData).sort().reverse().forEach(date => {
             const d = allData[date];
@@ -556,33 +570,22 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
         downloadFile(csvContent, `Deonysus_Report_${getShanghaiDate()}.csv`, 'text/csv;charset=utf-8;');
         setToastMsg("报表已生成");
     };
-
     const handleBackup = () => {
-        const backupData = {
-            logs: LocalDB.getAll(),
-            settings: LocalDB.getSettings(),
-            backupDate: new Date().toISOString()
-        };
+        const backupData = { logs: LocalDB.getAll(), settings: LocalDB.getSettings(), backupDate: new Date().toISOString() };
         downloadFile(JSON.stringify(backupData), `Deonysus_Backup_${getShanghaiDate()}.json`, 'application/json');
         setToastMsg("备份文件已下载");
     };
-
     const handleRestore = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (event) => {
             const result = LocalDB.importData(event.target.result);
-            if (result.success) {
-                alert(`成功恢复了 ${result.count} 天的数据！页面即将刷新。`);
-                window.location.reload();
-            } else {
-                alert("导入失败：文件格式不正确");
-            }
+            if (result.success) { alert(`成功恢复了 ${result.count} 天的数据！页面即将刷新。`); window.location.reload(); }
+            else { alert("导入失败：文件格式不正确"); }
         };
         reader.readAsText(file);
     };
-
     const downloadFile = (content, fileName, mimeType) => {
         const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
@@ -590,65 +593,73 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
 
+    const getRate = (key) => (!stats || stats.target === 0) ? 0 : Math.min(Math.round((stats[key].total / stats[key].target) * 100), 100);
+    const StatBox = ({ label, percent }) => (
+        <div className="bg-paper rounded-2xl p-3 flex flex-col items-center justify-center border-2 border-warm-100"><span className="text-xs font-bold text-warm-400 mb-1">{label}</span><span className={`text-xl font-bold ${percent >= 80 ? 'text-sage-500' : 'text-ink'}`}>{percent}%</span></div>
+    );
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={onClose}></div>
             <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] animate-[float_4s_ease-in-out_infinite] border-4 border-paper">
+                
+                {/* Header with Switcher */}
                 <div className="p-4 border-b-2 border-dashed border-warm-100 flex justify-between items-center bg-paper">
-                    <h2 className="font-bold text-lg text-ink">📊 守护月历</h2>
+                    <div className="flex bg-warm-50 p-1 rounded-lg">
+                        <button onClick={() => setViewMode('calendar')} className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${viewMode==='calendar' ? 'bg-white text-warm-600 shadow-sm' : 'text-warm-300'}`}>月历</button>
+                        <button onClick={() => setViewMode('stats')} className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${viewMode==='stats' ? 'bg-white text-warm-600 shadow-sm' : 'text-warm-300'}`}>统计</button>
+                    </div>
                     <button onClick={onClose} className="p-2 bg-white rounded-full text-warm-300 hover:text-warm-500"><Icons.X /></button>
                 </div>
 
                 <div className="p-5 overflow-y-auto">
-                    {/* Month Navigator */}
-                    <div className="flex justify-between items-center mb-4 px-2">
-                        <button onClick={() => handleMonthChange(-1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Left /></button>
-                        <span className="font-bold text-ink text-lg">
-                            {calendarMonth.getFullYear()}年 {calendarMonth.getMonth() + 1}月
-                        </span>
-                        <button onClick={() => handleMonthChange(1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Right /></button>
-                    </div>
-
-                    {/* Calendar Grid */}
-                    <div className="calendar-grid mb-6">
-                        {['日','一','二','三','四','五','六'].map(d => (
-                            <div key={d} className="text-center text-xs text-warm-300 font-bold mb-2">{d}</div>
-                        ))}
-                        {calendarDays.map((d, i) => (
-                            d ? (
-                                <div 
-                                    key={i} 
-                                    onClick={() => handleDayClick(d)}
-                                    className={`calendar-day heat-${getHeatLevel(d.data)} ${selectedDateData && selectedDateData.dateStr === d.dateStr ? 'ring-2 ring-ink ring-offset-1' : ''}`}
-                                >
-                                    {d.day}
+                    {/* Calendar View */}
+                    {viewMode === 'calendar' && (
+                        <>
+                            <div className="flex justify-between items-center mb-4 px-2">
+                                <button onClick={() => handleMonthChange(-1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Left /></button>
+                                <span className="font-bold text-ink text-lg">{calendarMonth.getFullYear()}年 {calendarMonth.getMonth() + 1}月</span>
+                                <button onClick={() => handleMonthChange(1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Right /></button>
+                            </div>
+                            <div className="calendar-grid mb-6">
+                                {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-center text-xs text-warm-300 font-bold mb-2">{d}</div>)}
+                                {calendarDays.map((d, i) => d ? <div key={i} onClick={() => handleDayClick(d)} className={`calendar-day heat-${getHeatLevel(d.data)} ${selectedDateData && selectedDateData.dateStr === d.dateStr ? 'ring-2 ring-ink ring-offset-1' : ''}`}>{d.day}</div> : <div key={i}></div>)}
+                            </div>
+                            {selectedDateData && (
+                                <div className="bg-paper p-4 rounded-xl border-2 border-warm-100 mb-4 animate-fade-in">
+                                    <h4 className="font-bold text-ink mb-2 text-sm border-b border-warm-200 pb-1">{selectedDateData.dateStr} 的记忆</h4>
+                                    {selectedDateData.data ? (
+                                        <div className="space-y-1 text-xs text-ink/80">
+                                            <div className="flex justify-between"><span>💧 饮水:</span> <b>{selectedDateData.data.water}</b></div>
+                                            <div className="flex justify-between"><span>💩 顺畅:</span> <b>{selectedDateData.data.poop}</b></div>
+                                            <div className="flex justify-between"><span>🚶‍♀️ 脊柱:</span> <b>{selectedDateData.data.spine}</b></div>
+                                            <div className="flex justify-between"><span>🌙 睡眠:</span> <b>{selectedDateData.data.sleep}</b></div>
+                                            <div className="flex justify-between"><span>⏱️ 专注:</span> <b>{( (selectedDateData.data.timeLogs||[]).reduce((a,c)=>a+c.duration,0)/60 ).toFixed(1)}h</b></div>
+                                        </div>
+                                    ) : <p className="text-xs text-warm-400 text-center py-2">这一天是空白的呢。</p>}
                                 </div>
-                            ) : <div key={i}></div>
-                        ))}
-                    </div>
-
-                    {/* Day Details */}
-                    {selectedDateData && (
-                        <div className="bg-paper p-4 rounded-xl border-2 border-warm-100 mb-4 animate-fade-in">
-                            <h4 className="font-bold text-ink mb-2 text-sm border-b border-warm-200 pb-1">
-                                {selectedDateData.dateStr} 的记忆
-                            </h4>
-                            {selectedDateData.data ? (
-                                <div className="space-y-1 text-xs text-ink/80">
-                                    <div className="flex justify-between"><span>💧 饮水:</span> <b>{selectedDateData.data.water}</b></div>
-                                    <div className="flex justify-between"><span>💩 顺畅:</span> <b>{selectedDateData.data.poop}</b></div>
-                                    <div className="flex justify-between"><span>🚶‍♀️ 脊柱:</span> <b>{selectedDateData.data.spine}</b></div>
-                                    <div className="flex justify-between"><span>🌙 睡眠:</span> <b>{selectedDateData.data.sleep}</b></div>
-                                    <div className="flex justify-between"><span>⏱️ 专注:</span> <b>{( (selectedDateData.data.timeLogs||[]).reduce((a,c)=>a+c.duration,0)/60 ).toFixed(1)}h</b></div>
-                                </div>
-                            ) : (
-                                <p className="text-xs text-warm-400 text-center py-2">这一天是空白的呢。</p>
                             )}
-                        </div>
+                        </>
                     )}
 
-                    {/* Data Tools */}
-                    <div className="pt-4 border-t-2 border-dashed border-warm-100">
+                    {/* Stats View */}
+                    {viewMode === 'stats' && (
+                        <>
+                            <div className="flex p-2 bg-paper mb-4 rounded-xl border border-warm-100">
+                                {[7, 30].map(r => (<button key={r} onClick={() => setRange(r)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>))}
+                            </div>
+                            {!stats ? <div className="text-center py-8 text-warm-300 font-bold">计算中...</div> : (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3"><StatBox label="💧 饮水守护" percent={getRate('water')} /><StatBox label="💩 顺畅守护" percent={getRate('poop')} /><StatBox label="🚶‍♀️ 脊柱活动" percent={getRate('spine')} /><StatBox label="🌙 睡前锚点" percent={getRate('sleep')} /></div>
+                                    <div className="bg-warm-100 rounded-2xl p-4 border border-warm-200"><div className="flex justify-between items-center mb-1"><span className="font-bold text-warm-600">🛡️ 日均觉察</span><span className="text-2xl font-bold text-warm-500">{stats.impulse.avg}</span></div></div>
+                                    <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100"><div className="flex justify-between items-center mb-1"><span className="font-bold text-indigo-600">⏱️ 专注时光</span><span className="text-2xl font-bold text-indigo-500">{(stats.totalFocusTime / 3600).toFixed(1)}h</span></div></div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Footer Tools */}
+                    <div className="pt-4 border-t-2 border-dashed border-warm-100 mt-4">
                         <h3 className="text-xs font-bold text-warm-400 mb-2 ml-1">数据管家</h3>
                         <div className="grid grid-cols-2 gap-2">
                             <button onClick={handleExportCSV} className="py-2 bg-paper text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-50 flex items-center justify-center gap-1"><Icons.Download /> 导出 Excel</button>
