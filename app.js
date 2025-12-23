@@ -273,6 +273,7 @@ onAddTag={saveNewTag}
 </button>
 </nav>
 
+{/* 这里的 todayData 是关键，必须透传给 Modal */}
 {showReport && <ReportModal currentDate={currentDateStr} todayData={todayData} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
 
 {showResetConfirm && (
@@ -294,7 +295,7 @@ onAddTag={saveNewTag}
 );
 };
 
-// --- 专注计时器 ---
+// --- 专注计时器 (纯净版) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 const [status, setStatus] = useState('idle');
 const [elapsed, setElapsed] = useState(0);
@@ -304,6 +305,7 @@ const [selectedColor, setSelectedColor] = useState('warm');
 const [isAddingTag, setIsAddingTag] = useState(false);
 const timerRef = useRef(null);
 
+// 初始化
 useEffect(() => {
 const saved = LocalDB.getTimerState();
 if (saved) {
@@ -320,6 +322,7 @@ setStatus(saved.status);
 }
 }, []);
 
+// 唤醒校准
 useEffect(() => {
 const handleVisibilityChange = () => {
 if (document.visibilityState === 'visible') {
@@ -335,6 +338,7 @@ document.addEventListener("visibilitychange", handleVisibilityChange);
 return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
 }, []);
 
+// 计时逻辑
 useEffect(() => {
 if (status === 'running') {
 timerRef.current = setInterval(() => {
@@ -528,7 +532,7 @@ const fileInputRef = useRef(null);
 useEffect(() => {
 const allData = LocalDB.getAll();
 
-// 强制把今日最新的 todayData 合并进去（防止 LocalDB 还没写入导致图表滞后）
+// 强制把今日最新的 todayData 合并进去
 allData[currentDate] = todayData;
 
 const reportDays = [];
@@ -640,14 +644,14 @@ mode === 'data' ? (
 </>
 ) : (
 <div className="space-y-6">
-{/* Focus Time Chart */}
+{/* Simple CSS Chart for Focus Time */}
 <div>
 <h3 className="text-xs font-bold text-warm-400 mb-3">⏱️ 专注时长 (小时)</h3>
 <div className="flex items-end justify-between h-32 gap-1">
 {chartData.map((d, i) => {
 const h = (d.focus / 60);
-const maxH = Math.max(...chartData.map(c => c.focus/60), 1);
-const height = Math.max((h / maxH) * 100, 5);
+const maxH = Math.max(...chartData.map(c => c.focus/60), 1); // Avoid div by zero
+const height = Math.max((h / maxH) * 100, 5); // Min 5% height
 return (
 <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
 <div className="w-full bg-indigo-100 rounded-t-md relative hover:bg-indigo-200 transition-all" style={{height: `${height}%`}}>
@@ -660,7 +664,7 @@ return (
 </div>
 </div>
 
-{/* Habit Completion Chart */}
+{/* Simple CSS Chart for Habit Completion */}
 <div className="mt-8">
 <h3 className="text-xs font-bold text-warm-400 mb-3">✨ 习惯完成度 (%)</h3>
 <div className="flex items-end justify-between h-32 gap-1">
