@@ -6,25 +6,23 @@
     <title>Deonysus | 守护锚点</title>
     
     <!-- PWA 配置 -->
-    <link rel="manifest" href="./manifest.json"> <!-- 注意前面的 ./ -->
+    <link rel="manifest" href="manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Deonysus">
     
     <!-- 图标引用 -->
-    <link rel="apple-touch-icon" href="./icon.png"> <!-- 注意前面的 ./ -->
-    <link rel="icon" type="image/png" href="./icon.png"> <!-- 注意前面的 ./ -->
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="icon" type="image/png" href="icon.png">
     
     <!-- 样式表 -->
-    <link rel="stylesheet" href="./styles.css"> <!-- 🔴 关键修复：加了 ./ -->
+    <link rel="stylesheet" href="styles.css">
     
-    <!-- 核心库 (Staticfile 国内源 - 保持不变) -->
+    <!-- 核心库 (Staticfile 国内源) -->
     <script crossorigin src="https://cdn.staticfile.org/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.staticfile.org/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.staticfile.org/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Recharts 图表库 -->
-    <script crossorigin src="https://cdn.staticfile.org/recharts/2.12.0/Recharts.min.js"></script>
     
     <!-- Tailwind 配置 -->
     <script>
@@ -35,7 +33,7 @@
                         paper: '#FFFDF5',
                         ink: '#4A4A4A',
                         cream: '#FDF6E3',
-                        warm: { 50: '#FFF8E1', 100: '#FFF0D4', 200: '#FFE0A3', 300: '#FFCB70', 500: '#FF9F43', 600: '#E67E22' },
+                        warm: { 100: '#FFF0D4', 200: '#FFE0A3', 300: '#FFCB70', 500: '#FF9F43', 600: '#E67E22' },
                         sage: { 100: '#E8F5E9', 500: '#81C784', 600: '#66BB6A' },
                         berry: { 100: '#FCE4EC', 500: '#F06292', 600: '#EC407A' },
                         tomato: { 100: '#FFEBEE', 500: '#FF5252', 600: '#E53935' }
@@ -63,23 +61,30 @@
     </script>
 </head>
 <body class="font-rounded selection:bg-warm-200 bg-paper text-ink">
+
     <div id="root"></div>
-    
-    <!-- 错误捕捉 -->
+
+    <!-- 错误捕捉 (保留一个简单的，万一呢) -->
     <script>
         window.onerror = function(message) {
-            // 忽略一些良性的脚本错误
+            // 忽略常见的脚本加载错误（通常是网络波动，刷新就好）
             if (message === 'Script error.') return;
+            
             const root = document.getElementById('root');
-            // 如果页面还没加载出来，显示错误
-            if (!root.hasChildNodes()) {
-                root.innerHTML = `<div style="padding:20px;color:#E53935;text-align:center"><h3>🤕 启动有点痛...</h3><p>请刷新重试</p><p style="font-size:10px;opacity:0.6">${message}</p></div>`;
-            }
+            root.innerHTML = `
+                <div style="padding:20px;color:#E53935;text-align:center;font-family:sans-serif;">
+                    <h3 style="margin-bottom:10px;">🤕 遇到了一点小障碍</h3>
+                    <p style="font-size:12px;opacity:0.8;">请尝试刷新页面</p>
+                    <div style="margin-top:15px;background:#fff0f0;padding:10px;border-radius:8px;text-align:left;font-size:10px;border:1px solid #ffcdcd;word-break:break-all;">
+                        ${message}
+                    </div>
+                </div>`;
         };
     </script>
 
     <!-- 引入主逻辑 -->
-    <!-- 🔴 关键修复：加了 ./ -->
-    <script type="text/babel" src="./app.js"></script>
+    <script type="text/babel" src="app.js"></script>
 </body>
 </html>
+
+
