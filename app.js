@@ -1,4 +1,4 @@
-﻿const { useState, useEffect, useRef, useMemo } = React;
+﻿const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
@@ -273,7 +273,6 @@ onAddTag={saveNewTag}
 </button>
 </nav>
 
-{/* 这里的 todayData 是关键，必须透传给 Modal */}
 {showReport && <ReportModal currentDate={currentDateStr} todayData={todayData} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
 
 {showResetConfirm && (
@@ -295,7 +294,7 @@ onAddTag={saveNewTag}
 );
 };
 
-// --- 专注计时器 (纯净版) ---
+// --- 专注计时器 (纯净版 - 去除番茄钟) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 const [status, setStatus] = useState('idle');
 const [elapsed, setElapsed] = useState(0);
@@ -388,10 +387,12 @@ document.getElementById('tag-dialog').close();
 
 return (
 <div className="space-y-6 pt-4">
+
+{/* Timer Display */}
 <div className="relative flex flex-col items-center justify-center py-8">
-<div className={`absolute w-64 h-64 bg-warm-100 rounded-full blur-3xl opacity-50 transition-all duration-1000 ${status === 'running' ? 'scale-110 opacity-70' : 'scale-100'}`}></div>
 <div className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'border-warm-300 animate-breathe' : 'border-warm-100'}`}>
 
+{/* Tag Selector */}
 <div className="mb-4 relative">
 <div
 onClick={() => status === 'idle' && document.getElementById('tag-dialog').showModal()}
@@ -520,19 +521,17 @@ return (
 );
 };
 
-// --- ReportModal (V18 - 实时趋势修复版) ---
+// --- ReportModal (V20 - 舒适视野版) ---
 const ReportModal = ({ currentDate, todayData, onClose, setToastMsg }) => {
 const [range, setRange] = useState(7);
-const [mode, setMode] = useState('data'); // 'data' | 'chart'
+const [mode, setMode] = useState('data');
 const [stats, setStats] = useState(null);
 const [chartData, setChartData] = useState([]);
 const fileInputRef = useRef(null);
+const chartContainerRef = useRef(null); // 用于滚动定位
 
-// 关键修复：依赖 todayData，当主界面有更新时，这里也会重新计算
 useEffect(() => {
 const allData = LocalDB.getAll();
-
-// 强制把今日最新的 todayData 合并进去
 allData[currentDate] = todayData;
 
 const reportDays = [];
@@ -545,13 +544,19 @@ const dateStr = formatter.format(d);
 const dayData = allData[dateStr] || {};
 reportDays.push({date: dateStr, ...dayData});
 
-// Chart Data Prep
 const focusMin = (dayData.timeLogs || []).reduce((a,c)=>a+c.duration,0)/60;
-const habitScore = ((dayData.water||0)/8 + (dayData.poop||0) + (dayData.spine||0)/2 + (dayData.sleep||0))/4 * 100; // 粗略完成度
+
+// 优化评分逻辑：每项满分1，总分满分100
+const waterScore = Math.min((dayData.water||0)/8, 1);
+const poopScore = Math.min((dayData.poop||0)/1, 1);
+const spineScore = Math.min((dayData.spine||0)/2, 1);
+const sleepScore = Math.min((dayData.sleep||0)/1, 1);
+const habitScore = (waterScore + poopScore + spineScore + sleepScore) / 4 * 100;
+
 cData.push({
-date: dateStr.slice(5), // MM-DD
+date: dateStr.slice(5),
 focus: focusMin,
-habit: Math.min(habitScore, 100)
+habit: habitScore
 });
 }
 
@@ -560,10 +565,17 @@ reportDays.forEach(d => {
 newStats.water.total += (d.water||0); newStats.poop.total += (d.poop||0); newStats.spine.total += (d.spine||0); newStats.sleep.total += (d.sleep||0); newStats.impulse.total += (d.impulse||0);
 if(d.timeLogs) d.timeLogs.forEach(l => newStats.totalFocusTime += l.duration);
 });
-newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / range).toFixed(1) : 0; // Avg over actual days range
+newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / range).toFixed(1) : 0;
 setStats(newStats);
 setChartData(cData);
-}, [range, todayData]); // <-- 关键：监听 todayData
+}, [range, todayData]);
+
+// 每次切换到 Chart 模式，自动滚动到最右边
+useLayoutEffect(() => {
+if (mode === 'chart' && chartContainerRef.current) {
+chartContainerRef.current.scrollLeft = chartContainerRef.current.scrollWidth;
+}
+}, [mode, chartData]);
 
 const handleExportCSV = () => {
 const allData = LocalDB.getAll();
@@ -622,7 +634,7 @@ return (
 
 <div className="flex p-2 bg-paper mx-4 mt-4 rounded-xl border border-warm-100">
 {[7, 30].map(r => (
-<button key={r} onClick={() => setRange(r)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>
+<button key={r} onClick={() => setRange(r)} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>
 ))}
 </div>
 
@@ -644,18 +656,19 @@ mode === 'data' ? (
 </>
 ) : (
 <div className="space-y-6">
-{/* Simple CSS Chart for Focus Time */}
+{/* Focus Time Chart (Scrollable) */}
 <div>
 <h3 className="text-xs font-bold text-warm-400 mb-3">⏱️ 专注时长 (小时)</h3>
-<div className="flex items-end justify-between h-32 gap-1">
+<div ref={chartContainerRef} className="overflow-x-auto pb-2 scrollbar-hide">
+<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 10)}%`}}>
 {chartData.map((d, i) => {
 const h = (d.focus / 60);
-const maxH = Math.max(...chartData.map(c => c.focus/60), 1); // Avoid div by zero
-const height = Math.max((h / maxH) * 100, 5); // Min 5% height
+const maxH = Math.max(...chartData.map(c => c.focus/60), 1);
+const height = Math.max((h / maxH) * 100, 5);
 return (
-<div key={i} className="flex-1 flex flex-col items-center gap-1 group">
+<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[20px]">
 <div className="w-full bg-indigo-100 rounded-t-md relative hover:bg-indigo-200 transition-all" style={{height: `${height}%`}}>
-<div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-indigo-600 text-white px-1 rounded whitespace-nowrap">{h.toFixed(1)}h</div>
+<div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-indigo-600 text-white px-1 rounded whitespace-nowrap z-10">{h.toFixed(1)}h</div>
 </div>
 <span className="text-[9px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2">{d.date}</span>
 </div>
@@ -663,19 +676,22 @@ return (
 })}
 </div>
 </div>
+</div>
 
-{/* Simple CSS Chart for Habit Completion */}
+{/* Habit Completion Chart (Scrollable) */}
 <div className="mt-8">
 <h3 className="text-xs font-bold text-warm-400 mb-3">✨ 习惯完成度 (%)</h3>
-<div className="flex items-end justify-between h-32 gap-1">
+<div className="overflow-x-auto pb-2 scrollbar-hide">
+<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 10)}%`}}>
 {chartData.map((d, i) => (
-<div key={i} className="flex-1 flex flex-col items-center gap-1 group">
+<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[20px]">
 <div className="w-full bg-sage-100 rounded-t-md relative hover:bg-sage-200 transition-all" style={{height: `${Math.max(d.habit, 5)}%`}}>
-<div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-sage-600 text-white px-1 rounded">{Math.round(d.habit)}%</div>
+<div className="opacity-0 group-hover:opacity-100 absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-sage-600 text-white px-1 rounded z-10">{Math.round(d.habit)}%</div>
 </div>
 <span className="text-[9px] text-warm-300 font-bold -rotate-45 origin-top-left translate-y-2">{d.date}</span>
 </div>
 ))}
+</div>
 </div>
 </div>
 </div>
