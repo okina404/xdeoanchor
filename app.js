@@ -40,40 +40,35 @@ saveSettings: (settings) => {
 localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 },
 
-// --- 核心升级：智能导入 (支持 JSON 和 CSV) ---
+// 智能导入 (支持 JSON 和 CSV)
 importData: (content, type) => {
 try {
 let logsToSave = {};
 
 if (type === 'json') {
 const jsonData = JSON.parse(content);
-// 验证 JSON 格式
 if (jsonData.logs) logsToSave = jsonData.logs;
-else if (typeof jsonData === 'object') logsToSave = jsonData; // 兼容直接导出的 logs 对象
+else if (typeof jsonData === 'object') logsToSave = jsonData;
 
 if (jsonData.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(jsonData.settings));
 }
 else if (type === 'csv') {
-// CSV 解析逻辑
 const lines = content.split('\n');
-const headers = lines[0].split(',');
-// 简单的 CSV 映射 (假设列顺序: 日期,饮水,顺畅,脊柱,睡眠,冲动...)
-// 注意：CSV 导入只能恢复基础打卡数据，复杂的专注记录可能会丢失细节
-
+// 跳过表头，从第一行开始
 const currentLogs = LocalDB.getAll();
 
 for (let i = 1; i < lines.length; i++) {
 const line = lines[i].trim();
 if (!line) continue;
+// 处理 CSV 中可能的引号包裹 (简单的 split 可能会切坏详情列)
+// 这里做一个简单的处理：只取前6列基础数据，因为详情列比较复杂且难以逆向恢复成对象数组
 const cols = line.split(',');
 const date = cols[0];
 
-// 简单的日期校验 (YYYY-MM-DD)
 if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
 
-// 融合数据 (保留现有数据，仅覆盖打卡数)
 logsToSave[date] = {
-...(currentLogs[date] || {}), // 保留原有的 timeLogs 等
+...(currentLogs[date] || {}),
 water: parseInt(cols[1]) || 0,
 poop: parseInt(cols[2]) || 0,
 spine: parseInt(cols[3]) || 0,
@@ -82,7 +77,6 @@ impulse: parseInt(cols[5]) || 0,
 lastUpdate: Date.now()
 };
 }
-// 合并到现有数据库
 logsToSave = { ...currentLogs, ...logsToSave };
 }
 
@@ -405,7 +399,6 @@ placeholder="新标签"
 <div
 onClick={() => status === 'idle' && setIsAddingTag(false)}
 className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2"
->
 <span className="text-xs font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
 <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={() => document.getElementById('tag-dialog').showModal()}>
 <span className="text-sm font-bold text-ink">{selectedTag}</span>
@@ -444,7 +437,6 @@ className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2"
 key={t}
 onClick={() => { setSelectedTag(t); document.getElementById('tag-dialog').close(); }}
 className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 ${selectedTag === t ? 'bg-warm-100 border-warm-400 text-warm-700' : 'bg-white border-warm-100 text-ink/60'}`}
->
 {t}
 </button>
 ))}
@@ -536,14 +528,16 @@ newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / reportD
 setStats(newStats);
 }, [range]);
 
-// 导出 Excel CSV
+// 导出 Excel CSV (V16 增强版：含详情)
 const handleExportCSV = () => {
 const allData = LocalDB.getAll();
-let csvContent = "\uFEFF日期,饮水,顺畅,脊柱,睡眠,冲动记录,总专注(分),详情\n";
+let csvContent = "\uFEFF日期,饮水,顺畅,脊柱,睡眠,冲动记录,总专注(分),专注详情\n";
 Object.keys(allData).sort().reverse().forEach(date => {
 const d = allData[date];
 const focus = (d.timeLogs||[]).reduce((a,c)=>a+c.duration,0)/60;
+// 拼接详情字符串，用分号隔开
 const details = (d.timeLogs||[]).map(l=>`${l.name}(${Math.round(l.duration/60)}m)`).join('; ');
+// details 包含逗号等符号时，必须用双引号包裹
 csvContent += `${date},${d.water||0},${d.poop||0},${d.spine||0},${d.sleep||0},${d.impulse||0},${focus.toFixed(1)},"${details}"\n`;
 });
 downloadFile(csvContent, `Deonysus_Report_${getShanghaiDate()}.csv`, 'text/csv;charset=utf-8;');
