@@ -1,6 +1,6 @@
 const { useState, useEffect, useRef } = React;
 
-// --- 1. 本地记忆系统 (升级版：支持 Tags 和 自定义配置) ---
+// --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
 const TIMER_STATE_KEY = 'deonysus_active_timer_v1';
 const SETTINGS_KEY = 'deonysus_settings_v1';
@@ -22,7 +22,6 @@ const all = LocalDB.getAll();
 all[dateKey] = { ...newData, lastUpdate: Date.now() };
 LocalDB.saveAll(all);
 },
-// 计时器状态
 getTimerState: () => {
 try { return JSON.parse(localStorage.getItem(TIMER_STATE_KEY)); } catch { return null; }
 },
@@ -30,26 +29,70 @@ saveTimerState: (state) => {
 if (!state) localStorage.removeItem(TIMER_STATE_KEY);
 else localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(state));
 },
-// 用户设置 (标签等)
 getSettings: () => {
 try {
 return JSON.parse(localStorage.getItem(SETTINGS_KEY) || JSON.stringify({
-tags: ['工作', '学习', '阅读', '运动', '发呆'],
-pomodoroDuration: 25
+tags: ['工作', '学习', '阅读', '运动', '发呆']
 }));
-} catch { return { tags: ['工作', '学习', '阅读', '运动'], pomodoroDuration: 25 }; }
+} catch { return { tags: ['工作', '学习', '阅读', '运动'] }; }
 },
 saveSettings: (settings) => {
 localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 },
-// 核心：导入数据
-importData: (jsonData) => {
+
+// --- 核心升级：智能导入 (支持 JSON 和 CSV) ---
+importData: (content, type) => {
 try {
-if (jsonData.logs) localStorage.setItem(STORAGE_KEY, JSON.stringify(jsonData.logs));
+let logsToSave = {};
+
+if (type === 'json') {
+const jsonData = JSON.parse(content);
+// 验证 JSON 格式
+if (jsonData.logs) logsToSave = jsonData.logs;
+else if (typeof jsonData === 'object') logsToSave = jsonData; // 兼容直接导出的 logs 对象
+
 if (jsonData.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(jsonData.settings));
+}
+else if (type === 'csv') {
+// CSV 解析逻辑
+const lines = content.split('\n');
+const headers = lines[0].split(',');
+// 简单的 CSV 映射 (假设列顺序: 日期,饮水,顺畅,脊柱,睡眠,冲动...)
+// 注意：CSV 导入只能恢复基础打卡数据，复杂的专注记录可能会丢失细节
+
+const currentLogs = LocalDB.getAll();
+
+for (let i = 1; i < lines.length; i++) {
+const line = lines[i].trim();
+if (!line) continue;
+const cols = line.split(',');
+const date = cols[0];
+
+// 简单的日期校验 (YYYY-MM-DD)
+if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+
+// 融合数据 (保留现有数据，仅覆盖打卡数)
+logsToSave[date] = {
+...(currentLogs[date] || {}), // 保留原有的 timeLogs 等
+water: parseInt(cols[1]) || 0,
+poop: parseInt(cols[2]) || 0,
+spine: parseInt(cols[3]) || 0,
+sleep: parseInt(cols[4]) || 0,
+impulse: parseInt(cols[5]) || 0,
+lastUpdate: Date.now()
+};
+}
+// 合并到现有数据库
+logsToSave = { ...currentLogs, ...logsToSave };
+}
+
+if (Object.keys(logsToSave).length > 0) {
+localStorage.setItem(STORAGE_KEY, JSON.stringify(logsToSave));
 return true;
+}
+return false;
 } catch (e) {
-console.error(e);
+console.error("Import Error:", e);
 return false;
 }
 }
@@ -97,9 +140,7 @@ Pause: () => <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"
 Stop: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="4" ry="4"></rect></svg>,
 TabHabit: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
 TabTime: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-Tag: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
-PlusSmall: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
-Coffee: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+Tag: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
 };
 
 // --- 5. 主程序 ---
@@ -256,79 +297,33 @@ onAddTag={saveNewTag}
 );
 };
 
-// --- 专注计时器 (支持番茄钟 + 标签) ---
+// --- 专注计时器 (纯净版 - 去除番茄钟) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
-// Mode: 'stopwatch' (正计时) | 'pomodoro' (倒计时)
-const [mode, setMode] = useState('stopwatch');
 const [status, setStatus] = useState('idle');
-const [elapsed, setElapsed] = useState(0); // 记录总秒数 (番茄钟时为倒计时秒数)
+const [elapsed, setElapsed] = useState(0);
 const [selectedTag, setSelectedTag] = useState(tags[0]);
 const [customTagInput, setCustomTagInput] = useState('');
 const [isAddingTag, setIsAddingTag] = useState(false);
+const timerRef = useRef(null);
 
-// 番茄钟默认时长 (25分钟)
-const POMODORO_LIMIT = 25 * 60;
-
-// 初始化/恢复
+// 初始化
 useEffect(() => {
 const saved = LocalDB.getTimerState();
 if (saved) {
-setMode(saved.mode || 'stopwatch');
 setSelectedTag(saved.tag || tags[0]);
-
 if (saved.status === 'running') {
 const now = Date.now();
 const diff = Math.floor((now - saved.lastTick) / 1000);
-// 恢复逻辑：正计时加时间，倒计时减时间
-const newElapsed = saved.mode === 'pomodoro' ? saved.elapsed - diff : saved.elapsed + diff;
-setElapsed(newElapsed);
+setElapsed(saved.elapsed + diff);
 setStatus('running');
 } else {
 setElapsed(saved.elapsed);
-setStatus(saved.status); // paused
+setStatus(saved.status);
 }
-} else {
-// 如果没有存档，初始化
-if (mode === 'pomodoro') setElapsed(POMODORO_LIMIT);
 }
 }, []);
 
-// 切换模式重置
-const switchMode = (newMode) => {
-if (status !== 'idle' && !confirm("切换模式会重置当前计时，确定吗？")) return;
-setMode(newMode);
-setStatus('idle');
-setElapsed(newMode === 'pomodoro' ? POMODORO_LIMIT : 0);
-LocalDB.saveTimerState(null);
-};
-
-// 计时逻辑
-useEffect(() => {
-let interval = null;
-if (status === 'running') {
-interval = setInterval(() => {
-setElapsed(prev => {
-let next;
-if (mode === 'stopwatch') {
-next = prev + 1;
-} else {
-next = prev - 1;
-if (next <= 0) {
-// 番茄钟结束！
-clearInterval(interval);
-handlePomodoroFinish();
-return 0;
-}
-}
-LocalDB.saveTimerState({ status: 'running', elapsed: next, lastTick: Date.now(), tag: selectedTag, mode });
-return next;
-});
-}, 1000);
-}
-return () => clearInterval(interval);
-}, [status, mode, selectedTag]);
-
-// 唤醒校准 (仅针对正计时优化，番茄钟倒计时也适用但处理更简单)
+// 唤醒校准
 useEffect(() => {
 const handleVisibilityChange = () => {
 if (document.visibilityState === 'visible') {
@@ -336,7 +331,7 @@ const saved = LocalDB.getTimerState();
 if (saved && saved.status === 'running') {
 const now = Date.now();
 const diff = Math.floor((now - saved.lastTick) / 1000);
-setElapsed(prev => saved.mode === 'pomodoro' ? saved.elapsed - diff : saved.elapsed + diff);
+setElapsed(saved.elapsed + diff);
 }
 }
 };
@@ -344,37 +339,36 @@ document.addEventListener("visibilitychange", handleVisibilityChange);
 return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
 }, []);
 
+// 计时逻辑
+useEffect(() => {
+if (status === 'running') {
+timerRef.current = setInterval(() => {
+setElapsed(prev => {
+const next = prev + 1;
+LocalDB.saveTimerState({ status: 'running', elapsed: next, lastTick: Date.now(), tag: selectedTag });
+return next;
+});
+}, 1000);
+} else {
+clearInterval(timerRef.current);
+}
+return () => clearInterval(timerRef.current);
+}, [status, selectedTag]);
+
 const handleStart = () => {
 setStatus('running');
-LocalDB.saveTimerState({ status: 'running', elapsed, lastTick: Date.now(), tag: selectedTag, mode });
+LocalDB.saveTimerState({ status: 'running', elapsed, lastTick: Date.now(), tag: selectedTag });
 };
 const handlePause = () => {
 setStatus('paused');
-LocalDB.saveTimerState({ status: 'paused', elapsed, lastTick: Date.now(), tag: selectedTag, mode });
+LocalDB.saveTimerState({ status: 'paused', elapsed, lastTick: Date.now(), tag: selectedTag });
 };
-
-// 手动停止
 const handleStop = () => {
-if ((mode === 'stopwatch' && elapsed > 0) || (mode === 'pomodoro' && elapsed < POMODORO_LIMIT)) {
-// 计算实际专注时长
-const duration = mode === 'stopwatch' ? elapsed : (POMODORO_LIMIT - elapsed);
-if (duration > 5) { // 大于5秒才记录
-onSaveLog({ id: Date.now(), name: selectedTag, duration: duration, timestamp: Date.now(), type: mode });
+if (elapsed > 5) {
+onSaveLog({ id: Date.now(), name: selectedTag, duration: elapsed, timestamp: Date.now() });
 }
-}
-resetTimer();
-};
-
-// 番茄钟自然结束
-const handlePomodoroFinish = () => {
-onSaveLog({ id: Date.now(), name: `${selectedTag} (番茄钟)`, duration: POMODORO_LIMIT, timestamp: Date.now(), type: 'pomodoro' });
-alert("🎉 番茄钟完成！休息一下吧。");
-resetTimer();
-};
-
-const resetTimer = () => {
 setStatus('idle');
-setElapsed(mode === 'pomodoro' ? POMODORO_LIMIT : 0);
+setElapsed(0);
 LocalDB.saveTimerState(null);
 };
 
@@ -387,32 +381,12 @@ setIsAddingTag(false);
 }
 };
 
-// 颜色主题
-const themeColor = mode === 'pomodoro' ? 'text-tomato-500 border-tomato-200' : 'text-warm-600 border-warm-300';
-const bgColor = mode === 'pomodoro' ? 'bg-tomato-100' : 'bg-warm-100';
-
 return (
 <div className="space-y-6 pt-4">
 
-{/* Mode Switcher */}
-<div className="flex justify-center bg-white p-1 rounded-full border border-warm-200 w-fit mx-auto shadow-sm">
-<button
-onClick={() => switchMode('stopwatch')}
-className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${mode === 'stopwatch' ? 'bg-warm-100 text-warm-600 shadow-sm' : 'text-ink/40'}`}
->
-⏱️ 正计时
-</button>
-<button
-onClick={() => switchMode('pomodoro')}
-className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${mode === 'pomodoro' ? 'bg-tomato-100 text-tomato-600 shadow-sm' : 'text-ink/40'}`}
->
-🍅 番茄钟
-</button>
-</div>
-
 {/* Timer Display */}
-<div className="relative flex flex-col items-center justify-center py-4">
-<div className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? `${themeColor} animate-breathe` : 'border-warm-100'}`}>
+<div className="relative flex flex-col items-center justify-center py-8">
+<div className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'border-warm-300 animate-breathe' : 'border-warm-100'}`}>
 
 {/* Tag Selector */}
 <div className="mb-4 relative">
@@ -441,7 +415,7 @@ className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2"
 )}
 </div>
 
-<div className={`text-5xl font-bold font-mono tracking-widest tabular-nums ${mode === 'pomodoro' ? 'text-tomato-500' : 'text-warm-600'}`}>
+<div className="text-5xl font-bold font-mono tracking-widest tabular-nums text-warm-600">
 {formatTimeHHMMSS(elapsed)}
 </div>
 <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
@@ -452,7 +426,7 @@ className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2"
 {status === 'running' ? (
 <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
 ) : (
-<button onClick={handleStart} className={`w-18 h-18 p-4 rounded-2xl text-white border-b-4 active:border-b-0 active:translate-y-1 transition-all shadow-lg ${mode === 'pomodoro' ? 'bg-tomato-500 border-tomato-600 shadow-tomato-200' : 'bg-warm-500 border-warm-600 shadow-warm-200'}`}><Icons.Play /></button>
+<button onClick={handleStart} className="w-18 h-18 p-4 rounded-2xl bg-warm-500 text-white border-b-4 border-warm-600 active:border-b-0 active:translate-y-1 transition-all shadow-lg shadow-warm-200"><Icons.Play /></button>
 )}
 {(status === 'running' || status === 'paused') && (
 <button onClick={handleStop} className="w-18 h-18 p-4 rounded-2xl bg-white text-ink/40 border-b-4 border-warm-100 active:border-b-0 active:translate-y-1 transition-all"><Icons.Stop /></button>
@@ -460,7 +434,7 @@ className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2"
 </div>
 </div>
 
-{/* Tag Selection Modal (Native Dialog) */}
+{/* Tag Selection Modal */}
 <dialog id="tag-dialog" className="p-0 rounded-2xl backdrop:bg-ink/20 border-0 shadow-xl">
 <div className="bg-white p-5 w-72">
 <h3 className="text-lg font-bold text-ink mb-3">选择标签</h3>
@@ -503,7 +477,6 @@ e.target.value = '';
 <div className="flex-1">
 <div className="flex items-center gap-2">
 <span className="font-bold text-ink/80">{log.name}</span>
-{log.type === 'pomodoro' && <span className="text-[10px] bg-tomato-100 text-tomato-600 px-1.5 rounded">番茄</span>}
 </div>
 <div className="text-[10px] font-bold text-warm-300 mt-1">{new Date(log.timestamp).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})}</div>
 </div>
@@ -543,7 +516,7 @@ return (
 const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
 const [range, setRange] = useState(7);
 const [stats, setStats] = useState(null);
-const fileInputRef = useRef(null); // 文件上传引用
+const fileInputRef = useRef(null);
 
 useEffect(() => {
 const allData = LocalDB.getAll();
@@ -588,22 +561,20 @@ downloadFile(JSON.stringify(backupData), `Deonysus_Backup_${getShanghaiDate()}.j
 setToastMsg("备份文件已下载，请妥善保存");
 };
 
-// 恢复备份
+// 恢复备份 (增强版：兼容 CSV)
 const handleRestore = (e) => {
 const file = e.target.files[0];
 if (!file) return;
+
+const fileType = file.name.endsWith('.csv') ? 'csv' : 'json';
 const reader = new FileReader();
+
 reader.onload = (event) => {
-try {
-const data = JSON.parse(event.target.result);
-if (LocalDB.importData(data)) {
+if (LocalDB.importData(event.target.result, fileType)) {
 alert("数据恢复成功！页面即将刷新。");
 window.location.reload();
 } else {
-alert("文件格式不对哦，请检查。");
-}
-} catch(err) {
-alert("无法读取文件：" + err.message);
+alert("文件读取失败，请检查格式。");
 }
 };
 reader.readAsText(file);
@@ -640,7 +611,7 @@ return (
 <button onClick={handleExportCSV} className="py-2 bg-paper text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-50 flex items-center justify-center gap-1"><Icons.Download /> 导出 Excel</button>
 <button onClick={handleBackup} className="py-2 bg-warm-100 text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-200 flex items-center justify-center gap-1"><Icons.Download /> 备份数据</button>
 <button onClick={() => fileInputRef.current.click()} className="col-span-2 py-3 bg-white text-sage-600 border-2 border-sage-100 rounded-xl font-bold text-sm active:bg-sage-50 flex items-center justify-center gap-2"><Icons.Upload /> 恢复备份</button>
-<input type="file" ref={fileInputRef} onChange={handleRestore} className="hidden" accept=".json" />
+<input type="file" ref={fileInputRef} onChange={handleRestore} className="hidden" accept=".json,.csv" />
 </div>
 </div>
 </>
