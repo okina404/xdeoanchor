@@ -1,6 +1,6 @@
 const { useState, useEffect, useRef } = React;
 
-// --- 1. 本地记忆系统 ---
+// --- 1. 本地记忆系统 (保持 V15.1 的兼容性) ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
 const TIMER_STATE_KEY = 'deonysus_active_timer_v1';
 const SETTINGS_KEY = 'deonysus_settings_v1';
@@ -22,7 +22,6 @@ const LocalDB = {
         all[dateKey] = { ...newData, lastUpdate: Date.now() };
         LocalDB.saveAll(all);
     },
-    // 计时器状态
     getTimerState: () => {
         try { return JSON.parse(localStorage.getItem(TIMER_STATE_KEY)); } catch { return null; }
     },
@@ -30,7 +29,6 @@ const LocalDB = {
         if (!state) localStorage.removeItem(TIMER_STATE_KEY);
         else localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(state));
     },
-    // 用户设置 (标签)
     getSettings: () => {
         try { 
             return JSON.parse(localStorage.getItem(SETTINGS_KEY) || JSON.stringify({
@@ -41,84 +39,57 @@ const LocalDB = {
     saveSettings: (settings) => {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     },
-    
-    // --- 核心修复：智能导入 (支持 JSON 和 旧版 CSV) ---
+    // 智能导入
     importData: (fileContent) => {
         try {
-            // 1. 尝试作为 JSON 导入 (新版备份)
+            // JSON
             const jsonData = JSON.parse(fileContent);
             if (jsonData.logs) {
-                // 合并而不是直接覆盖，防止误操作清空
                 const current = LocalDB.getAll();
                 const merged = { ...current, ...jsonData.logs };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-                
                 if (jsonData.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(jsonData.settings));
                 return { success: true, type: 'JSON', count: Object.keys(jsonData.logs).length };
             }
-        } catch (e) {
-            // JSON 解析失败，说明可能是 CSV
-            console.log("JSON解析失败，尝试CSV模式...");
-        }
+        } catch (e) {}
 
         try {
-            // 2. 尝试作为 CSV 导入 (旧版备份)
-            // CSV 格式: 日期,饮水,顺畅,脊柱,睡眠,冲动记录,总专注(分)...
+            // CSV
             const lines = fileContent.split('\n');
             let successCount = 0;
             const currentData = LocalDB.getAll();
-
-            // 从第1行开始（跳过表头）
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (!line) continue;
-                
-                // 处理 CSV 可能的逗号分隔 (简单处理)
                 const cols = line.split(',');
                 const date = cols[0] ? cols[0].trim() : null;
-                
-                // 校验日期格式 YYYY-MM-DD
                 if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
                     const water = parseInt(cols[1]) || 0;
                     const poop = parseInt(cols[2]) || 0;
                     const spine = parseInt(cols[3]) || 0;
                     const sleep = parseInt(cols[4]) || 0;
                     const impulse = parseInt(cols[5]) || 0;
-                    
-                    // 尝试读取专注时长 (如果有)
                     let timeLogs = currentData[date]?.timeLogs || [];
-                    if (cols[6]) {
-                        const focusMin = parseFloat(cols[6]);
-                        if (focusMin > 0) {
-                            // 如果有旧的专注时长，创建一个“历史记录”条目，避免总时长丢失
-                            const alreadyHasImport = timeLogs.some(l => l.name === '历史导入数据');
-                            if (!alreadyHasImport) {
-                                timeLogs.push({
-                                    id: Date.now() + i, // 唯一ID
-                                    name: '历史导入数据',
-                                    duration: Math.floor(focusMin * 60), // 转换为秒
-                                    timestamp: new Date(date).getTime() + 43200000 // 设为当天中午
-                                });
-                            }
+                    if (cols[6] && parseFloat(cols[6]) > 0) {
+                        const alreadyHasImport = timeLogs.some(l => l.name === '历史导入数据');
+                        if (!alreadyHasImport) {
+                            timeLogs.push({
+                                id: Date.now() + i,
+                                name: '历史导入数据',
+                                duration: Math.floor(parseFloat(cols[6]) * 60),
+                                timestamp: new Date(date).getTime() + 43200000
+                            });
                         }
                     }
-
-                    currentData[date] = {
-                        water, poop, spine, sleep, impulse, timeLogs,
-                        lastUpdate: Date.now()
-                    };
+                    currentData[date] = { water, poop, spine, sleep, impulse, timeLogs, lastUpdate: Date.now() };
                     successCount++;
                 }
             }
-
             if (successCount > 0) {
                 LocalDB.saveAll(currentData);
                 return { success: true, type: 'CSV', count: successCount };
             }
-        } catch (e) {
-            console.error("CSV导入也失败了", e);
-        }
-
+        } catch (e) {}
         return { success: false };
     }
 };
@@ -165,7 +136,9 @@ const Icons = {
     Stop: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="4" ry="4"></rect></svg>,
     TabHabit: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
     TabTime: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-    Tag: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    Tag: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+    Left: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
+    Right: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
 };
 
 // --- 5. 主程序 ---
@@ -322,7 +295,6 @@ const App = () => {
     );
 };
 
-// --- 专注计时器 (纯净版 - 无番茄钟) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     const [status, setStatus] = useState('idle');
     const [elapsed, setElapsed] = useState(0);
@@ -331,7 +303,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     const [isAddingTag, setIsAddingTag] = useState(false);
     const timerRef = useRef(null);
 
-    // 初始化
     useEffect(() => {
         const saved = LocalDB.getTimerState();
         if (saved) {
@@ -348,7 +319,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
         }
     }, []);
 
-    // 唤醒校准
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
@@ -364,7 +334,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     }, []);
 
-    // 计时逻辑
     useEffect(() => {
         if (status === 'running') {
             timerRef.current = setInterval(() => {
@@ -408,12 +377,8 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 
     return (
         <div className="space-y-6 pt-4">
-            
-            {/* Timer Display */}
             <div className="relative flex flex-col items-center justify-center py-8">
                 <div className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'border-warm-300 animate-breathe' : 'border-warm-100'}`}>
-                    
-                    {/* Tag Selector */}
                     <div className="mb-4 relative">
                         {isAddingTag ? (
                             <div className="flex items-center gap-1">
@@ -439,14 +404,11 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                             </div>
                         )}
                     </div>
-
                     <div className="text-5xl font-bold font-mono tracking-widest tabular-nums text-warm-600">
                         {formatTimeHHMMSS(elapsed)}
                     </div>
                     <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
                 </div>
-
-                {/* Controls */}
                 <div className="flex items-center gap-6 mt-8 relative z-20">
                     {status === 'running' ? (
                         <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
@@ -459,7 +421,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                 </div>
             </div>
 
-            {/* Tag Selection Modal */}
             <dialog id="tag-dialog" className="p-0 rounded-2xl backdrop:bg-ink/20 border-0 shadow-xl">
                 <div className="bg-white p-5 w-72">
                     <h3 className="text-lg font-bold text-ink mb-3">选择标签</h3>
@@ -490,7 +451,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                 </div>
             </dialog>
 
-            {/* Timeline */}
             <div className="bg-white rounded-3xl p-5 soft-shadow border border-warm-50">
                 <div className="flex justify-between items-end px-2 mb-4 border-b border-dashed border-warm-100 pb-2">
                     <h3 className="font-bold text-ink">今天的足迹</h3>
@@ -538,28 +498,51 @@ const HabitCard = ({ config, value, onIncrement }) => {
     );
 };
 
+// --- V16 更新: 热力日历组件 ---
 const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
-    const [range, setRange] = useState(7);
-    const [stats, setStats] = useState(null);
+    const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'stats'
+    const [selectedDateData, setSelectedDateData] = useState(null); // 点击某天显示详情
+    const [calendarMonth, setCalendarMonth] = useState(new Date()); // 当前显示的月份
     const fileInputRef = useRef(null);
 
-    useEffect(() => {
-        const allData = LocalDB.getAll();
-        const reportDays = [];
-        for (let i = 0; i < range; i++) {
-            const d = new Date(); d.setDate(d.getDate() - i);
-            const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
-            const dateStr = formatter.format(d);
-            if (allData[dateStr]) reportDays.push({date: dateStr, ...allData[dateStr]});
-        }
-        const newStats = { days: reportDays.length, water: {total:0,target:range*8}, poop:{total:0,target:range}, spine:{total:0,target:range*2}, sleep:{total:0,target:range}, impulse:{total:0,avg:0}, totalFocusTime:0 };
-        reportDays.forEach(d => {
-            newStats.water.total += (d.water||0); newStats.poop.total += (d.poop||0); newStats.spine.total += (d.spine||0); newStats.sleep.total += (d.sleep||0); newStats.impulse.total += (d.impulse||0);
-            if(d.timeLogs) d.timeLogs.forEach(l => newStats.totalFocusTime += l.duration);
-        });
-        newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / reportDays.length).toFixed(1) : 0;
-        setStats(newStats);
-    }, [range]);
+    // 计算日历数据
+    const allData = LocalDB.getAll();
+    const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
+    const firstDayOfWeek = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay(); // 0 is Sunday
+    
+    // 生成日历格子
+    const calendarDays = [];
+    for (let i = 0; i < firstDayOfWeek; i++) calendarDays.push(null); // 填充空白
+    for (let i = 1; i <= daysInMonth; i++) {
+        const dateStr = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth()+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+        calendarDays.push({ day: i, dateStr, data: allData[dateStr] });
+    }
+
+    // 计算热力等级 (0-4)
+    const getHeatLevel = (data) => {
+        if (!data) return 0;
+        let score = 0;
+        if (data.water >= 8) score++;
+        if (data.poop >= 1) score++;
+        if (data.spine >= 2) score++;
+        if (data.sleep >= 1) score++;
+        // 专注时长每 30 分钟算 0.5 分，最高 1 分
+        const focusMin = (data.timeLogs || []).reduce((a,c)=>a+c.duration,0) / 60;
+        if (focusMin >= 60) score++;
+        
+        return Math.min(score, 4); // Max level 4
+    };
+
+    const handleMonthChange = (delta) => {
+        const newDate = new Date(calendarMonth);
+        newDate.setMonth(newDate.getMonth() + delta);
+        setCalendarMonth(newDate);
+        setSelectedDateData(null);
+    };
+
+    const handleDayClick = (dayData) => {
+        if (dayData) setSelectedDateData(dayData);
+    };
 
     const handleExportCSV = () => {
         const allData = LocalDB.getAll();
@@ -581,7 +564,7 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
             backupDate: new Date().toISOString()
         };
         downloadFile(JSON.stringify(backupData), `Deonysus_Backup_${getShanghaiDate()}.json`, 'application/json');
-        setToastMsg("备份文件已下载，请妥善保存");
+        setToastMsg("备份文件已下载");
     };
 
     const handleRestore = (e) => {
@@ -594,7 +577,7 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
                 alert(`成功恢复了 ${result.count} 天的数据！页面即将刷新。`);
                 window.location.reload();
             } else {
-                alert("导入失败：文件格式不正确（请使用 .json 备份或旧版 .csv）");
+                alert("导入失败：文件格式不正确");
             }
         };
         reader.readAsText(file);
@@ -607,35 +590,73 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
 
-    const getRate = (key) => (!stats || stats.target === 0) ? 0 : Math.min(Math.round((stats[key].total / stats[key].target) * 100), 100);
-    const StatBox = ({ label, percent }) => (
-        <div className="bg-paper rounded-2xl p-3 flex flex-col items-center justify-center border-2 border-warm-100"><span className="text-xs font-bold text-warm-400 mb-1">{label}</span><span className={`text-xl font-bold ${percent >= 80 ? 'text-sage-500' : 'text-ink'}`}>{percent}%</span></div>
-    );
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={onClose}></div>
             <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] animate-[float_4s_ease-in-out_infinite] border-4 border-paper">
-                <div className="p-4 border-b-2 border-dashed border-warm-100 flex justify-between items-center bg-paper"><h2 className="font-bold text-lg text-ink">📊 守护成绩单</h2><button onClick={onClose} className="p-2 bg-white rounded-full text-warm-300 hover:text-warm-500"><Icons.X /></button></div>
-                <div className="flex p-2 bg-paper mx-4 mt-4 rounded-xl border border-warm-100">{[7, 30].map(r => (<button key={r} onClick={() => setRange(r)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>))}</div>
-                <div className="p-6 overflow-y-auto space-y-4">
-                    {!stats ? <div className="text-center py-8 text-warm-300 font-bold">翻阅记忆中...</div> : (
-                        <>
-                            <div className="grid grid-cols-2 gap-3"><StatBox label="💧 饮水守护" percent={getRate('water')} /><StatBox label="💩 顺畅守护" percent={getRate('poop')} /><StatBox label="🚶‍♀️ 脊柱活动" percent={getRate('spine')} /><StatBox label="🌙 睡前锚点" percent={getRate('sleep')} /></div>
-                            <div className="bg-warm-100 rounded-2xl p-4 border border-warm-200"><div className="flex justify-between items-center mb-1"><span className="font-bold text-warm-600">🛡️ 日均觉察</span><span className="text-2xl font-bold text-warm-500">{stats.impulse.avg}</span></div></div>
-                            <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100"><div className="flex justify-between items-center mb-1"><span className="font-bold text-indigo-600">⏱️ 专注时光</span><span className="text-2xl font-bold text-indigo-500">{(stats.totalFocusTime / 3600).toFixed(1)}h</span></div></div>
-                            
-                            <div className="pt-4 border-t-2 border-dashed border-warm-100">
-                                <h3 className="text-xs font-bold text-warm-400 mb-2 ml-1">数据管家</h3>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={handleExportCSV} className="py-2 bg-paper text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-50 flex items-center justify-center gap-1"><Icons.Download /> 导出 Excel</button>
-                                    <button onClick={handleBackup} className="py-2 bg-warm-100 text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-200 flex items-center justify-center gap-1"><Icons.Download /> 备份数据</button>
-                                    <button onClick={() => fileInputRef.current.click()} className="col-span-2 py-3 bg-white text-sage-600 border-2 border-sage-100 rounded-xl font-bold text-sm active:bg-sage-50 flex items-center justify-center gap-2"><Icons.Upload /> 恢复备份 (JSON/CSV)</button>
-                                    <input type="file" ref={fileInputRef} onChange={handleRestore} className="hidden" accept=".json,.csv" />
+                <div className="p-4 border-b-2 border-dashed border-warm-100 flex justify-between items-center bg-paper">
+                    <h2 className="font-bold text-lg text-ink">📊 守护月历</h2>
+                    <button onClick={onClose} className="p-2 bg-white rounded-full text-warm-300 hover:text-warm-500"><Icons.X /></button>
+                </div>
+
+                <div className="p-5 overflow-y-auto">
+                    {/* Month Navigator */}
+                    <div className="flex justify-between items-center mb-4 px-2">
+                        <button onClick={() => handleMonthChange(-1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Left /></button>
+                        <span className="font-bold text-ink text-lg">
+                            {calendarMonth.getFullYear()}年 {calendarMonth.getMonth() + 1}月
+                        </span>
+                        <button onClick={() => handleMonthChange(1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Right /></button>
+                    </div>
+
+                    {/* Calendar Grid */}
+                    <div className="calendar-grid mb-6">
+                        {['日','一','二','三','四','五','六'].map(d => (
+                            <div key={d} className="text-center text-xs text-warm-300 font-bold mb-2">{d}</div>
+                        ))}
+                        {calendarDays.map((d, i) => (
+                            d ? (
+                                <div 
+                                    key={i} 
+                                    onClick={() => handleDayClick(d)}
+                                    className={`calendar-day heat-${getHeatLevel(d.data)} ${selectedDateData && selectedDateData.dateStr === d.dateStr ? 'ring-2 ring-ink ring-offset-1' : ''}`}
+                                >
+                                    {d.day}
                                 </div>
-                            </div>
-                        </>
+                            ) : <div key={i}></div>
+                        ))}
+                    </div>
+
+                    {/* Day Details */}
+                    {selectedDateData && (
+                        <div className="bg-paper p-4 rounded-xl border-2 border-warm-100 mb-4 animate-fade-in">
+                            <h4 className="font-bold text-ink mb-2 text-sm border-b border-warm-200 pb-1">
+                                {selectedDateData.dateStr} 的记忆
+                            </h4>
+                            {selectedDateData.data ? (
+                                <div className="space-y-1 text-xs text-ink/80">
+                                    <div className="flex justify-between"><span>💧 饮水:</span> <b>{selectedDateData.data.water}</b></div>
+                                    <div className="flex justify-between"><span>💩 顺畅:</span> <b>{selectedDateData.data.poop}</b></div>
+                                    <div className="flex justify-between"><span>🚶‍♀️ 脊柱:</span> <b>{selectedDateData.data.spine}</b></div>
+                                    <div className="flex justify-between"><span>🌙 睡眠:</span> <b>{selectedDateData.data.sleep}</b></div>
+                                    <div className="flex justify-between"><span>⏱️ 专注:</span> <b>{( (selectedDateData.data.timeLogs||[]).reduce((a,c)=>a+c.duration,0)/60 ).toFixed(1)}h</b></div>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-warm-400 text-center py-2">这一天是空白的呢。</p>
+                            )}
+                        </div>
                     )}
+
+                    {/* Data Tools */}
+                    <div className="pt-4 border-t-2 border-dashed border-warm-100">
+                        <h3 className="text-xs font-bold text-warm-400 mb-2 ml-1">数据管家</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={handleExportCSV} className="py-2 bg-paper text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-50 flex items-center justify-center gap-1"><Icons.Download /> 导出 Excel</button>
+                            <button onClick={handleBackup} className="py-2 bg-warm-100 text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-200 flex items-center justify-center gap-1"><Icons.Download /> 备份数据</button>
+                            <button onClick={() => fileInputRef.current.click()} className="col-span-2 py-3 bg-white text-sage-600 border-2 border-sage-100 rounded-xl font-bold text-sm active:bg-sage-50 flex items-center justify-center gap-2"><Icons.Upload /> 恢复备份 (JSON/CSV)</button>
+                            <input type="file" ref={fileInputRef} onChange={handleRestore} className="hidden" accept=".json,.csv" />
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -644,3 +665,5 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
+
+
