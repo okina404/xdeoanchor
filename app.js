@@ -39,7 +39,6 @@ const LocalDB = {
     saveSettings: (settings) => {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     },
-    // 智能导入
     importData: (fileContent) => {
         try {
             const jsonData = JSON.parse(fileContent);
@@ -108,6 +107,12 @@ const formatDuration = (seconds) => {
     if (seconds < 60) return `${seconds}s`;
     const m = Math.floor(seconds / 60);
     return `${m}m`;
+};
+// 智能格式化小时/分钟
+const formatSmartDuration = (seconds) => {
+    const m = seconds / 60;
+    if (m < 60) return `${m.toFixed(1)}m`;
+    return `${(m / 60).toFixed(1)}h`;
 };
 
 // --- 3. 习惯配置 ---
@@ -295,7 +300,7 @@ const App = () => {
     );
 };
 
-// --- 专注计时器 (纯净版) ---
+// --- 专注计时器 (纯净版 - 无番茄钟) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     const [status, setStatus] = useState('idle');
     const [elapsed, setElapsed] = useState(0);
@@ -304,6 +309,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     const [isAddingTag, setIsAddingTag] = useState(false);
     const timerRef = useRef(null);
 
+    // 初始化
     useEffect(() => {
         const saved = LocalDB.getTimerState();
         if (saved) {
@@ -320,6 +326,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
         }
     }, []);
 
+    // 唤醒校准
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
@@ -335,6 +342,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     }, []);
 
+    // 计时逻辑
     useEffect(() => {
         if (status === 'running') {
             timerRef.current = setInterval(() => {
@@ -499,13 +507,13 @@ const HabitCard = ({ config, value, onIncrement }) => {
     );
 };
 
-// --- V17 更新: 双模式报表组件 ---
+// --- V17.1 更新: 修复专注时长单位显示 ---
 const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'stats'
     const [selectedDateData, setSelectedDateData] = useState(null);
     const [calendarMonth, setCalendarMonth] = useState(new Date());
-    const [range, setRange] = useState(7); // 统计模式用的天数
-    const [stats, setStats] = useState(null); // 统计模式用的数据
+    const [range, setRange] = useState(7);
+    const [stats, setStats] = useState(null);
     const fileInputRef = useRef(null);
 
     const allData = LocalDB.getAll();
@@ -634,7 +642,8 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
                                             <div className="flex justify-between"><span>💩 顺畅:</span> <b>{selectedDateData.data.poop}</b></div>
                                             <div className="flex justify-between"><span>🚶‍♀️ 脊柱:</span> <b>{selectedDateData.data.spine}</b></div>
                                             <div className="flex justify-between"><span>🌙 睡眠:</span> <b>{selectedDateData.data.sleep}</b></div>
-                                            <div className="flex justify-between"><span>⏱️ 专注:</span> <b>{( (selectedDateData.data.timeLogs||[]).reduce((a,c)=>a+c.duration,0)/60 ).toFixed(1)}h</b></div>
+                                            {/* 修复：使用 formatSmartDuration 显示时长 */}
+                                            <div className="flex justify-between"><span>⏱️ 专注:</span> <b>{formatSmartDuration((selectedDateData.data.timeLogs||[]).reduce((a,c)=>a+c.duration,0))}</b></div>
                                         </div>
                                     ) : <p className="text-xs text-warm-400 text-center py-2">这一天是空白的呢。</p>}
                                 </div>
@@ -652,7 +661,7 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-2 gap-3"><StatBox label="💧 饮水守护" percent={getRate('water')} /><StatBox label="💩 顺畅守护" percent={getRate('poop')} /><StatBox label="🚶‍♀️ 脊柱活动" percent={getRate('spine')} /><StatBox label="🌙 睡前锚点" percent={getRate('sleep')} /></div>
                                     <div className="bg-warm-100 rounded-2xl p-4 border border-warm-200"><div className="flex justify-between items-center mb-1"><span className="font-bold text-warm-600">🛡️ 日均觉察</span><span className="text-2xl font-bold text-warm-500">{stats.impulse.avg}</span></div></div>
-                                    <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100"><div className="flex justify-between items-center mb-1"><span className="font-bold text-indigo-600">⏱️ 专注时光</span><span className="text-2xl font-bold text-indigo-500">{(stats.totalFocusTime / 3600).toFixed(1)}h</span></div></div>
+                                    <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100"><div className="flex justify-between items-center mb-1"><span className="font-bold text-indigo-600">⏱️ 专注时光</span><span className="text-2xl font-bold text-indigo-500">{formatSmartDuration(stats.totalFocusTime)}</span></div></div>
                                 </div>
                             )}
                         </>
