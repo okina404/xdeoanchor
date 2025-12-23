@@ -1,12 +1,14 @@
-﻿// Version: V21.0 - Always-on Chart Labels
-const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
+﻿// Version: V22.0 - Safety First (Auto Fallback)
+const { useState, useEffect, useRef, useLayoutEffect } = React;
+
+// 安全获取 Recharts，如果不存在则为 undefined，不会报错
+const Recharts = window.Recharts || null;
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
 const TIMER_STATE_KEY = 'deonysus_active_timer_v1';
 const SETTINGS_KEY = 'deonysus_settings_v1';
 
-// 预设颜色盘
 const COLOR_PALETTE = {
 warm: 'bg-warm-100 text-warm-700 border-warm-300',
 blue: 'bg-blue-100 text-blue-700 border-blue-300',
@@ -20,7 +22,6 @@ getAll: () => {
 try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
 },
 saveAll: (data) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); },
-
 getToday: (dateKey) => {
 const all = LocalDB.getAll();
 const day = all[dateKey] || { water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [] };
@@ -85,7 +86,7 @@ return true;
 }
 return false;
 } catch (e) {
-console.error("Import Error:", e);
+console.error(e);
 return false;
 }
 }
@@ -292,6 +293,7 @@ onAddTag={saveNewTag}
 );
 };
 
+// --- TimeTracker ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 const [status, setStatus] = useState('idle');
 const [elapsed, setElapsed] = useState(0);
@@ -389,6 +391,7 @@ return (
 <div
 onClick={() => status === 'idle' && document.getElementById('tag-dialog').showModal()}
 className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
+>
 <span className="text-xs font-bold text-ink/40 mb-1">当前专注</span>
 <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 transition-all ${COLOR_PALETTE[selectedTag.color || 'warm']}`}>
 <span className="text-sm font-bold">{selectedTag.name}</span>
@@ -428,6 +431,7 @@ className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
 key={t.name}
 onClick={() => { setSelectedTag(t); document.getElementById('tag-dialog').close(); }}
 className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-all ${selectedTag.name === t.name ? COLOR_PALETTE[t.color] + ' ring-2 ring-offset-1 ring-warm-200' : 'bg-white border-gray-100 text-ink/60'}`}
+>
 {t.name}
 </button>
 ))}
@@ -448,13 +452,14 @@ onChange={(e) => setCustomTagInput(e.target.value)}
 key={c}
 onClick={() => setSelectedColor(c)}
 className={`w-6 h-6 rounded-full border-2 ${selectedColor === c ? 'scale-125 border-ink/20 shadow-sm' : 'border-transparent opacity-50'} ${COLOR_PALETTE[c].split(' ')[0]}`}
-> </button>
+></button>
 ))}
 </div>
 <button
 onClick={handleAddNewTag}
 className="px-4 py-2 bg-warm-500 text-white rounded-xl font-bold text-xs disabled:opacity-50"
 disabled={!customTagInput.trim()}
+>
 添加
 </button>
 </div>
@@ -486,30 +491,7 @@ disabled={!customTagInput.trim()}
 );
 };
 
-const HabitCard = ({ config, value, onIncrement }) => {
-const isTargetReached = value >= config.max;
-const isClickable = config.type === 'infinite' || !isTargetReached;
-const percentage = Math.min((value / config.max) * 100, 100);
-return (
-<div onClick={isClickable ? onIncrement : undefined} className={`relative overflow-hidden rounded-3xl p-4 transition-all duration-300 select-none border-2 ${isClickable ? 'cursor-pointer active:scale-[0.98]' : 'cursor-default'} ${isTargetReached ? 'bg-white border-warm-200 opacity-80' : 'bg-white border-white soft-shadow hover:border-warm-200'}`}>
-<div className="absolute bottom-0 left-0 h-1.5 bg-warm-300 transition-all duration-500 rounded-r-full" style={{ width: `${percentage}%`, opacity: isTargetReached ? 0 : 0.5 }} />
-<div className="flex justify-between items-center relative z-10">
-<div className="flex items-center gap-3">
-<div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm ${config.color.split(' ')[0]}`}>{config.label.split(' ')[0]}</div>
-<div>
-<h3 className={`font-bold text-lg flex items-center gap-2 ${isTargetReached ? 'text-warm-400 line-through' : 'text-ink'}`}>{config.label.split(' ')[1]} {isTargetReached && <span className="text-warm-500 no-underline"><Icons.Check /></span>}</h3>
-<p className="text-xs text-ink/40 font-bold mt-0.5">{config.desc}</p>
-</div>
-</div>
-<div className="flex items-center gap-3">
-<div className="text-right"><span className={`text-2xl font-bold font-mono ${isTargetReached ? 'text-warm-300' : 'text-warm-600'}`}>{value}</span><span className="text-xs text-warm-300 font-bold">/{config.max}</span></div>
-<div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all border-b-2 active:border-b-0 active:translate-y-0.5 ${isTargetReached ? (config.type === 'infinite' ? 'bg-warm-400 text-white border-warm-500' : 'bg-gray-100 text-gray-300 border-gray-200') : 'bg-warm-100 text-warm-600 border-warm-200'}`}><Icons.Plus /></div>
-</div>
-</div>
-</div>
-);
-};
-
+// --- ReportModal (V22 - Auto Fallback) ---
 const ReportModal = ({ currentDate, todayData, onClose, setToastMsg }) => {
 const [range, setRange] = useState(7);
 const [mode, setMode] = useState('data');
@@ -534,6 +516,7 @@ reportDays.push({date: dateStr, ...dayData});
 
 const focusMin = (dayData.timeLogs || []).reduce((a,c)=>a+c.duration,0)/60;
 
+// 优化评分逻辑：每项满分1，总分满分100
 const waterScore = Math.min((dayData.water||0)/8, 1);
 const poopScore = Math.min((dayData.poop||0)/1, 1);
 const spineScore = Math.min((dayData.spine||0)/2, 1);
@@ -606,6 +589,80 @@ const StatBox = ({ label, percent }) => (
 <div className="bg-paper rounded-2xl p-3 flex flex-col items-center justify-center border-2 border-warm-100"><span className="text-xs font-bold text-warm-400 mb-1">{label}</span><span className={`text-xl font-bold ${percent >= 80 ? 'text-sage-500' : 'text-ink'}`}>{percent}%</span></div>
 );
 
+// 智能渲染图表
+const renderCharts = () => {
+if (Recharts) {
+const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } = Recharts;
+return (
+<div className="space-y-6">
+<div style={{ width: '100%', height: 200 }}>
+<h3 className="text-xs font-bold text-warm-400 mb-2">⏱️ 专注时长 (小时)</h3>
+<ResponsiveContainer>
+<BarChart data={chartData.map(d => ({...d, focus: parseFloat((d.focus/60).toFixed(1))}))}>
+<CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E0D8C0" />
+<XAxis dataKey="date" tick={{fontSize: 10, fill: '#9CA3AF'}} axisLine={false} tickLine={false} />
+<YAxis hide />
+<Tooltip cursor={{fill: '#FDF6E3'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
+<Bar dataKey="focus" fill="#818CF8" radius={[4, 4, 0, 0]} barSize={20} />
+</BarChart>
+</ResponsiveContainer>
+</div>
+<div style={{ width: '100%', height: 200 }}>
+<h3 className="text-xs font-bold text-warm-400 mb-2">✨ 习惯完成度 (%)</h3>
+<ResponsiveContainer>
+<BarChart data={chartData}>
+<CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E0D8C0" />
+<XAxis dataKey="date" tick={{fontSize: 10, fill: '#9CA3AF'}} axisLine={false} tickLine={false} />
+<YAxis hide domain={[0, 100]} />
+<Tooltip cursor={{fill: '#FDF6E3'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
+<Bar dataKey="habit" fill="#81C784" radius={[4, 4, 0, 0]} barSize={20} />
+</BarChart>
+</ResponsiveContainer>
+</div>
+</div>
+);
+} else {
+// Fallback CSS Charts
+return (
+<div className="space-y-6">
+<div>
+<h3 className="text-xs font-bold text-warm-400 mb-3">⏱️ 专注时长 (小时)</h3>
+<div ref={chartContainerRef} className="overflow-x-auto pb-4 scrollbar-hide">
+<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 12)}%`}}>
+{chartData.map((d, i) => {
+const h = (d.focus / 60);
+const maxH = Math.max(...chartData.map(c => c.focus/60), 1);
+const height = Math.max((h / maxH) * 100, 10);
+return (
+<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[30px]">
+<div className="text-[10px] font-bold text-indigo-500 mb-1">{h > 0 ? h.toFixed(1) : ''}</div>
+<div className="w-full bg-indigo-100 rounded-t-md relative hover:bg-indigo-200 transition-all" style={{height: `${height}%`}}></div>
+<span className="text-[10px] text-warm-400 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
+</div>
+)
+})}
+</div>
+</div>
+</div>
+<div className="mt-8">
+<h3 className="text-xs font-bold text-warm-400 mb-3">✨ 习惯完成度 (%)</h3>
+<div className="overflow-x-auto pb-4 scrollbar-hide">
+<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 12)}%`}}>
+{chartData.map((d, i) => (
+<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[30px]">
+<div className="text-[10px] font-bold text-sage-600 mb-1">{d.habit > 0 ? Math.round(d.habit) : ''}</div>
+<div className="w-full bg-sage-100 rounded-t-md relative hover:bg-sage-200 transition-all" style={{height: `${Math.max(d.habit, 10)}%`}}></div>
+<span className="text-[10px] text-warm-400 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
+</div>
+))}
+</div>
+</div>
+</div>
+</div>
+);
+}
+};
+
 return (
 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
 <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={onClose}></div>
@@ -620,7 +677,7 @@ return (
 
 <div className="flex p-2 bg-paper mx-4 mt-4 rounded-xl border border-warm-100">
 {[7, 30].map(r => (
-<button key={r} onClick={() => setRange(r)} className={`flex-1 py-3 text-lg font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>
+<button key={r} onClick={() => setRange(r)} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>
 ))}
 </div>
 
@@ -641,48 +698,7 @@ mode === 'data' ? (
 </div>
 </>
 ) : (
-<div className="space-y-6">
-{/* Simple CSS Chart for Focus Time (V21 - Always-on Labels) */}
-<div>
-<h3 className="text-xs font-bold text-warm-400 mb-3">⏱️ 专注时长 (小时)</h3>
-<div ref={chartContainerRef} className="overflow-x-auto pb-4 scrollbar-hide">
-<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 12)}%`}}>
-{chartData.map((d, i) => {
-const h = (d.focus / 60);
-const maxH = Math.max(...chartData.map(c => c.focus/60), 1);
-const height = Math.max((h / maxH) * 100, 10); // Min height ensures label space
-return (
-<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[30px]">
-{/* Label always visible */}
-<div className="text-[10px] font-bold text-indigo-500 mb-1">{h > 0 ? h.toFixed(1) : ''}</div>
-<div className="w-full bg-indigo-100 rounded-t-md relative hover:bg-indigo-200 transition-all" style={{height: `${height}%`}}>
-</div>
-<span className="text-[10px] text-warm-400 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
-</div>
-)
-})}
-</div>
-</div>
-</div>
-
-{/* Simple CSS Chart for Habit Completion (V21 - Always-on Labels) */}
-<div className="mt-8">
-<h3 className="text-xs font-bold text-warm-400 mb-3">✨ 习惯完成度 (%)</h3>
-<div className="overflow-x-auto pb-4 scrollbar-hide">
-<div className="flex items-end h-32 gap-3" style={{width: `${Math.max(100, chartData.length * 12)}%`}}>
-{chartData.map((d, i) => (
-<div key={i} className="flex-1 flex flex-col items-center gap-1 group min-w-[30px]">
-{/* Label always visible */}
-<div className="text-[10px] font-bold text-sage-600 mb-1">{d.habit > 0 ? Math.round(d.habit) : ''}</div>
-<div className="w-full bg-sage-100 rounded-t-md relative hover:bg-sage-200 transition-all" style={{height: `${Math.max(d.habit, 10)}%`}}>
-</div>
-<span className="text-[10px] text-warm-400 font-bold -rotate-45 origin-top-left translate-y-2 whitespace-nowrap">{d.date}</span>
-</div>
-))}
-</div>
-</div>
-</div>
-</div>
+renderCharts()
 )
 )}
 </div>
