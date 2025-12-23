@@ -1,18 +1,9 @@
-﻿const { useState, useEffect, useRef, useMemo } = React;
+﻿const { useState, useEffect, useRef } = React;
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
 const TIMER_STATE_KEY = 'deonysus_active_timer_v1';
 const SETTINGS_KEY = 'deonysus_settings_v1';
-
-// 预设颜色盘
-const COLOR_PALETTE = {
-warm: 'bg-warm-100 text-warm-700 border-warm-300',
-blue: 'bg-blue-100 text-blue-700 border-blue-300',
-green: 'bg-sage-100 text-sage-700 border-sage-300',
-rose: 'bg-berry-100 text-berry-700 border-berry-300',
-purple: 'bg-purple-100 text-purple-700 border-purple-300',
-};
 
 const LocalDB = {
 getAll: () => {
@@ -38,20 +29,18 @@ saveTimerState: (state) => {
 if (!state) localStorage.removeItem(TIMER_STATE_KEY);
 else localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(state));
 },
-// 用户设置 (升级：Tag 支持对象结构 {name, color})
 getSettings: () => {
 try {
-const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-let tags = settings.tags || ['工作', '学习', '阅读', '运动', '发呆'];
-// 兼容性迁移：如果 Tag 是字符串，转为对象
-tags = tags.map(t => typeof t === 'string' ? { name: t, color: 'warm' } : t);
-return { tags };
-} catch { return { tags: [{name:'工作',color:'blue'}, {name:'阅读',color:'warm'}] }; }
+return JSON.parse(localStorage.getItem(SETTINGS_KEY) || JSON.stringify({
+tags: ['工作', '学习', '阅读', '运动', '发呆']
+}));
+} catch { return { tags: ['工作', '学习', '阅读', '运动'] }; }
 },
 saveSettings: (settings) => {
 localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 },
-// 导入数据
+
+// 智能导入
 importData: (content, type) => {
 try {
 let logsToSave = {};
@@ -60,7 +49,8 @@ const jsonData = JSON.parse(content);
 if (jsonData.logs) logsToSave = jsonData.logs;
 else if (typeof jsonData === 'object') logsToSave = jsonData;
 if (jsonData.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(jsonData.settings));
-} else if (type === 'csv') {
+}
+else if (type === 'csv') {
 const lines = content.split('\n');
 const currentLogs = LocalDB.getAll();
 for (let i = 1; i < lines.length; i++) {
@@ -108,10 +98,6 @@ return `${h}:${m}:${s}`;
 const formatDuration = (seconds) => {
 if (seconds < 60) return `${seconds}s`;
 const m = Math.floor(seconds / 60);
-if (m > 60) {
-const h = (m/60).toFixed(1);
-return `${h}h`;
-}
 return `${m}m`;
 };
 
@@ -139,9 +125,7 @@ Pause: () => <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"
 Stop: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="4" ry="4"></rect></svg>,
 TabHabit: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
 TabTime: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-Tag: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
-Grid: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>,
-List: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+Tag: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
 };
 
 // --- 5. 主程序 ---
@@ -153,12 +137,13 @@ const [showResetConfirm, setShowResetConfirm] = useState(false);
 const [toastMsg, setToastMsg] = useState(null);
 const [currentDateStr, setCurrentDateStr] = useState(getShanghaiDate());
 const [settings, setSettings] = useState(LocalDB.getSettings());
+const [lastUpdateTrigger, setLastUpdateTrigger] = useState(0); // 强制刷新触发器
 
 useEffect(() => {
 const nowStr = getShanghaiDate();
 setCurrentDateStr(nowStr);
 setTodayData(LocalDB.getToday(nowStr));
-}, []);
+}, [lastUpdateTrigger]); // 依赖触发器
 
 useEffect(() => {
 if(toastMsg) {
@@ -166,6 +151,10 @@ const timer = setTimeout(() => setToastMsg(null), 2500);
 return () => clearTimeout(timer);
 }
 }, [toastMsg]);
+
+const triggerUpdate = () => {
+setLastUpdateTrigger(Date.now()); // 触发全局更新
+};
 
 const updateHabit = (key, delta) => {
 const currentVal = todayData[key] || 0;
@@ -176,12 +165,14 @@ if (HABIT_CONFIG[key].type === 'count' && newVal > HABIT_CONFIG[key].max) return
 const newData = { ...todayData, [key]: newVal };
 setTodayData(newData);
 LocalDB.updateToday(currentDateStr, newData);
+triggerUpdate();
 };
 
 const addTimeLog = (log) => {
 const newData = { ...todayData, timeLogs: [log, ...(todayData.timeLogs || [])] };
 setTodayData(newData);
 LocalDB.updateToday(currentDateStr, newData);
+triggerUpdate();
 };
 
 const deleteTimeLog = (id) => {
@@ -189,6 +180,7 @@ if(!confirm("要擦掉这条记忆吗？")) return;
 const newData = { ...todayData, timeLogs: todayData.timeLogs.filter(l => l.id !== id) };
 setTodayData(newData);
 LocalDB.updateToday(currentDateStr, newData);
+triggerUpdate();
 };
 
 const confirmReset = () => {
@@ -198,6 +190,7 @@ LocalDB.updateToday(currentDateStr, emptyData);
 LocalDB.saveTimerState(null);
 setShowResetConfirm(false);
 setToastMsg("新的一页开始了");
+triggerUpdate();
 };
 
 const saveNewTag = (newTagName, color) => {
@@ -210,6 +203,7 @@ LocalDB.saveSettings(newSettings);
 
 return (
 <div className="min-h-screen max-w-md mx-auto relative shadow-2xl overflow-hidden pb-28 bg-paper">
+
 <header className="px-6 pt-14 pb-4">
 <div className="text-center">
 <h1 className="text-3xl font-bold text-warm-600 tracking-wide mb-1" style={{fontFamily: 'Comic Sans MS, cursive, sans-serif'}}>Deonysus</h1>
@@ -277,7 +271,7 @@ onAddTag={saveNewTag}
 </button>
 </nav>
 
-{showReport && <ReportModal currentDate={currentDateStr} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
+{showReport && <ReportModal currentDate={currentDateStr} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} updateTrigger={lastUpdateTrigger} />}
 
 {showResetConfirm && (
 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -298,14 +292,24 @@ onAddTag={saveNewTag}
 );
 };
 
-// --- 专注计时器 (支持彩色标签) ---
+// --- 专注计时器 ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 const [status, setStatus] = useState('idle');
 const [elapsed, setElapsed] = useState(0);
 const [selectedTag, setSelectedTag] = useState(tags[0]);
 const [customTagInput, setCustomTagInput] = useState('');
-const [selectedColor, setSelectedColor] = useState('warm'); // 新增颜色选择
+const [selectedColor, setSelectedColor] = useState('warm');
+const [isAddingTag, setIsAddingTag] = useState(false);
 const timerRef = useRef(null);
+
+// 颜色盘
+const COLOR_PALETTE = {
+warm: 'bg-warm-100 text-warm-700 border-warm-300',
+blue: 'bg-blue-100 text-blue-700 border-blue-300',
+green: 'bg-sage-100 text-sage-700 border-sage-300',
+rose: 'bg-berry-100 text-berry-700 border-berry-300',
+purple: 'bg-purple-100 text-purple-700 border-purple-300',
+};
 
 // 初始化
 useEffect(() => {
@@ -391,6 +395,7 @@ document.getElementById('tag-dialog').close();
 
 return (
 <div className="space-y-6 pt-4">
+
 {/* Timer Display */}
 <div className="relative flex flex-col items-center justify-center py-8">
 <div className={`absolute w-64 h-64 bg-warm-100 rounded-full blur-3xl opacity-50 transition-all duration-1000 ${status === 'running' ? 'scale-110 opacity-70' : 'scale-100'}`}></div>
@@ -429,7 +434,7 @@ className="flex flex-col items-center justify-center gap-1 cursor-pointer group"
 </div>
 </div>
 
-{/* Tag Dialog (With Color Picker) */}
+{/* Tag Selection Modal */}
 <dialog id="tag-dialog" className="p-0 rounded-2xl backdrop:bg-ink/20 border-0 shadow-xl m-auto">
 <div className="bg-white p-5 w-80">
 <div className="flex justify-between items-center mb-4">
@@ -528,10 +533,9 @@ return (
 );
 };
 
-// --- ReportModal (升级：支持图表切换) ---
-const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
+const ReportModal = ({ currentDate, onClose, setToastMsg, updateTrigger }) => {
 const [range, setRange] = useState(7);
-const [mode, setMode] = useState('data'); // 'data' | 'chart'
+const [mode, setMode] = useState('data');
 const [stats, setStats] = useState(null);
 const [chartData, setChartData] = useState([]);
 const fileInputRef = useRef(null);
@@ -548,11 +552,10 @@ const dateStr = formatter.format(d);
 const dayData = allData[dateStr] || {};
 reportDays.push({date: dateStr, ...dayData});
 
-// Chart Data Prep
 const focusMin = (dayData.timeLogs || []).reduce((a,c)=>a+c.duration,0)/60;
-const habitScore = ((dayData.water||0)/8 + (dayData.poop||0) + (dayData.spine||0)/2 + (dayData.sleep||0))/4 * 100; // 粗略完成度
+const habitScore = ((dayData.water||0)/8 + (dayData.poop||0) + (dayData.spine||0)/2 + (dayData.sleep||0))/4 * 100;
 cData.push({
-date: dateStr.slice(5), // MM-DD
+date: dateStr.slice(5),
 focus: focusMin,
 habit: Math.min(habitScore, 100)
 });
@@ -563,10 +566,10 @@ reportDays.forEach(d => {
 newStats.water.total += (d.water||0); newStats.poop.total += (d.poop||0); newStats.spine.total += (d.spine||0); newStats.sleep.total += (d.sleep||0); newStats.impulse.total += (d.impulse||0);
 if(d.timeLogs) d.timeLogs.forEach(l => newStats.totalFocusTime += l.duration);
 });
-newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / range).toFixed(1) : 0; // Avg over actual days range
+newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / range).toFixed(1) : 0;
 setStats(newStats);
 setChartData(cData);
-}, [range]);
+}, [range, updateTrigger]); // 依赖 updateTrigger，实现实时刷新
 
 const handleExportCSV = () => {
 const allData = LocalDB.getAll();
@@ -647,14 +650,13 @@ mode === 'data' ? (
 </>
 ) : (
 <div className="space-y-6">
-{/* Simple CSS Chart for Focus Time */}
 <div>
 <h3 className="text-xs font-bold text-warm-400 mb-3">⏱️ 专注时长 (小时)</h3>
 <div className="flex items-end justify-between h-32 gap-1">
 {chartData.map((d, i) => {
 const h = (d.focus / 60);
-const maxH = Math.max(...chartData.map(c => c.focus/60), 1); // Avoid div by zero
-const height = Math.max((h / maxH) * 100, 5); // Min 5% height
+const maxH = Math.max(...chartData.map(c => c.focus/60), 1);
+const height = Math.max((h / maxH) * 100, 5);
 return (
 <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
 <div className="w-full bg-indigo-100 rounded-t-md relative hover:bg-indigo-200 transition-all" style={{height: `${height}%`}}>
@@ -666,8 +668,6 @@ return (
 })}
 </div>
 </div>
-
-{/* Simple CSS Chart for Habit Completion */}
 <div className="mt-8">
 <h3 className="text-xs font-bold text-warm-400 mb-3">✨ 习惯完成度 (%)</h3>
 <div className="flex items-end justify-between h-32 gap-1">
