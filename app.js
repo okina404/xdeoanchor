@@ -1,4 +1,4 @@
-﻿﻿// Version: V21.0 - Always-on Chart Labels
+﻿// Version: V21.0 - Always-on Chart Labels
 const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
 
 // --- 1. 本地记忆系统 ---
