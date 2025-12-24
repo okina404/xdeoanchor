@@ -16,6 +16,19 @@ padding-bottom: env(safe-area-inset-bottom);
 .fade-in { animation: fadeIn 0.4s ease-out forwards; opacity: 0; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+/* 扇形生长动画 */
+.grow-sector {
+transform-origin: center;
+animation: grow 0.6s ease-out forwards;
+opacity: 0.8;
+}
+.grow-sector:hover { opacity: 1; transform: scale(1.05); transition: all 0.2s; }
+
+@keyframes grow {
+from { transform: scale(0); opacity: 0; }
+to { transform: scale(1); opacity: 0.8; }
+}
+
 /* 布局工具 */
 .safe-area-pb { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
 .doodle-border { border: 2px dashed #E0D8C0; }
@@ -47,18 +60,3 @@ cursor: pointer;
 .heat-2 { background-color: #FFCC80; color: #E65100; }
 .heat-3 { background-color: #FFB74D; color: #EF6C00; }
 .heat-4 { background-color: #FF9800; color: white; box-shadow: 0 2px 4px rgba(230, 81, 0, 0.2); }
-
-/* V18 新增：时间轴样式 */
-.timeline-line {
-position: absolute;
-left: 16px;
-top: 0;
-bottom: 0;
-width: 2px;
-background-color: #E0E0E0;
-z-index: 0;
-}
-.timeline-item {
-position: relative;
-z-index: 1;
-}
