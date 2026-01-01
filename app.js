@@ -194,15 +194,15 @@ const ImpulseModal = ({ onClose, onConfirm }) => {
                 <h3 className="text-lg font-bold text-ink mb-1">接住你了</h3>
                 <p className="text-xs text-ink/50 mb-4 font-bold">告诉我，发生了什么？（不想说也没关系）</p>
                 <textarea 
-                    className="w-full bg-warm-50 border border-warm-200 rounded-xl p-3 text-sm outline-none focus:border-berry-300 transition-colors mb-4 h-24 resize-none"
+                    className="w-full bg-warm-50 border border-warm-200 rounded-xl p-3 text-sm outline-none focus:border-berry-300 focus:ring-2 focus:ring-berry-100 transition-all mb-4 h-24 resize-none"
                     placeholder="比如：焦虑、无聊、牙痒痒..."
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     autoFocus
                 />
                 <div className="flex gap-2">
-                    <button onClick={() => onConfirm('')} className="flex-1 py-3 text-berry-400 bg-white border border-berry-100 rounded-xl font-bold text-xs">只记数字</button>
-                    <button onClick={() => onConfirm(note)} className="flex-[2] py-3 text-white bg-berry-500 rounded-xl font-bold shadow-md text-sm">记下来</button>
+                    <button onClick={() => onConfirm('')} className="flex-1 py-3 text-berry-400 bg-white border border-berry-100 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-berry-100">只记数字</button>
+                    <button onClick={() => onConfirm(note)} className="flex-[2] py-3 text-white bg-berry-500 rounded-xl font-bold shadow-md text-sm outline-none focus:ring-2 focus:ring-berry-300 focus:ring-offset-1">记下来</button>
                 </div>
             </div>
         </div>
@@ -478,19 +478,19 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
                         <h3 className="text-lg font-bold text-ink">
                             {dialogMode === 'select' ? '选择标签' : '管理标签'}
                         </h3>
+                        {/* V19.2: 修复管理按钮的默认蓝色 focus 边框，改为 outline-none 和自定义 ring */}
                         <button 
                             onClick={() => {
                                 setDialogMode(prev => prev === 'select' ? 'edit' : 'select');
                                 setCustomTagInput('');
                                 setEditingOriginalName(null);
                             }}
-                            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${dialogMode === 'edit' ? 'bg-ink text-white' : 'bg-warm-100 text-warm-600'}`}
+                            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 outline-none focus:ring-2 focus:ring-warm-300 focus:ring-offset-1 ${dialogMode === 'edit' ? 'bg-ink text-white' : 'bg-warm-100 text-warm-600'}`}
                         >
                             <Icons.Settings /> {dialogMode === 'select' ? '管理' : '完成'}
                         </button>
                     </div>
 
-                    {/* V19.1: 修复标签列表被裁切问题，添加 p-1 内边距，并替换 focus ring */}
                     <div className="flex flex-wrap gap-2 mb-4 max-h-40 overflow-y-auto p-1">
                         {tags.map((t, i) => (
                             <button 
@@ -517,29 +517,29 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
                                 <button 
                                     key={c} 
                                     onClick={() => setSelectedColor(c)}
-                                    className={`w-6 h-6 rounded-full flex-shrink-0 transition-transform ${selectedColor === c ? 'scale-125 ring-2 ring-offset-1 ring-warm-300' : ''}`}
+                                    className={`w-6 h-6 rounded-full flex-shrink-0 transition-transform outline-none focus:ring-2 focus:ring-warm-400 focus:ring-offset-1 ${selectedColor === c ? 'scale-125 ring-2 ring-offset-1 ring-warm-300' : ''}`}
                                     style={{backgroundColor: c}}
                                 />
                             ))}
                         </div>
                         <div className="flex gap-2">
                             <input 
-                                className="flex-1 bg-white px-3 py-2 rounded-xl border border-warm-200 text-sm outline-none focus:border-warm-400"
+                                className="flex-1 bg-white px-3 py-2 rounded-xl border border-warm-200 text-sm outline-none focus:border-warm-400 focus:ring-2 focus:ring-warm-100"
                                 placeholder={dialogMode === 'edit' ? "标签名称" : "输入新标签名"}
                                 value={customTagInput}
                                 onChange={e => setCustomTagInput(e.target.value)}
                                 onKeyDown={(e) => { if(e.key === 'Enter') handleSaveTag(); }}
                             />
                             {dialogMode === 'edit' && editingOriginalName && (
-                                <button onClick={handleDelete} className="px-3 rounded-xl bg-white border border-rose-200 text-rose-500"><Icons.Trash /></button>
+                                <button onClick={handleDelete} className="px-3 rounded-xl bg-white border border-rose-200 text-rose-500 outline-none focus:ring-2 focus:ring-rose-200"><Icons.Trash /></button>
                             )}
                         </div>
-                        <button onClick={handleSaveTag} className={`mt-3 w-full py-2 rounded-xl font-bold text-sm text-white shadow-md transition-colors ${customTagInput.trim() ? 'bg-warm-500 active:bg-warm-600' : 'bg-warm-300 cursor-not-allowed'}`}>
+                        <button onClick={handleSaveTag} className={`mt-3 w-full py-2 rounded-xl font-bold text-sm text-white shadow-md transition-colors outline-none focus:ring-2 focus:ring-warm-300 focus:ring-offset-1 ${customTagInput.trim() ? 'bg-warm-500 active:bg-warm-600' : 'bg-warm-300 cursor-not-allowed'}`}>
                             {dialogMode === 'edit' && editingOriginalName ? '保存修改' : '确认添加'}
                         </button>
                     </div>
                     
-                    <button onClick={() => document.getElementById('tag-dialog').close()} className="mt-2 w-full py-2 text-warm-300 rounded-xl font-bold text-xs hover:bg-warm-50">关闭</button>
+                    <button onClick={() => document.getElementById('tag-dialog').close()} className="mt-2 w-full py-2 text-warm-300 rounded-xl font-bold text-xs hover:bg-warm-50 outline-none focus:bg-warm-50">关闭</button>
                 </div>
             </dialog>
 
@@ -566,249 +566,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
                     })}
                 </div>
             </div>
-        </div>
-    );
-};
-
-// --- 5. 主程序 App ---
-const App = () => {
-    const [activeTab, setActiveTab] = useState('habits');
-    const [todayData, setTodayData] = useState({ water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [], impulseRecords: [] });
-    const [showReport, setShowReport] = useState(false);
-    const [showResetConfirm, setShowResetConfirm] = useState(false);
-    const [showImpulseModal, setShowImpulseModal] = useState(false);
-    const [toastMsg, setToastMsg] = useState(null);
-    const [currentDateStr, setCurrentDateStr] = useState(getShanghaiDate());
-    const [settings, setSettings] = useState(LocalDB.getSettings());
-    const [isLateNight, setIsLateNight] = useState(false);
-
-    useEffect(() => {
-        const nowStr = getShanghaiDate();
-        setCurrentDateStr(nowStr);
-        setTodayData(LocalDB.getToday(nowStr));
-        
-        const checkTime = () => {
-            const hour = new Date().getHours();
-            setIsLateNight(hour >= 23 || hour < 5);
-        };
-        checkTime();
-        const timer = setInterval(checkTime, 60000);
-        return () => clearInterval(timer);
-    }, []);
-
-    useEffect(() => {
-        if(toastMsg) {
-            const timer = setTimeout(() => setToastMsg(null), 2500);
-            return () => clearTimeout(timer);
-        }
-    }, [toastMsg]);
-
-    const handleHabitClick = (key) => {
-        if (key === 'impulse') {
-            setShowImpulseModal(true);
-        } else {
-            updateHabit(key, 1);
-        }
-    };
-
-    const updateHabit = (key, delta, extraData = null) => {
-        const currentVal = todayData[key] || 0;
-        let newVal = currentVal + delta;
-        if (newVal < 0) newVal = 0;
-        if (HABIT_CONFIG[key].type === 'count' && newVal > HABIT_CONFIG[key].max) return;
-        
-        let newData = { ...todayData, [key]: newVal };
-        
-        if (extraData && key === 'impulse') {
-            const newRecord = { id: Date.now(), note: extraData.note, timestamp: Date.now() };
-            newData.impulseRecords = [newRecord, ...(todayData.impulseRecords || [])];
-        }
-
-        setTodayData(newData);
-        LocalDB.updateToday(currentDateStr, newData);
-    };
-
-    const confirmImpulse = (note) => {
-        updateHabit('impulse', 1, { note });
-        setShowImpulseModal(false);
-        setToastMsg(note ? "我也听到了。" : "觉察已记录");
-    };
-
-    const addTimeLog = (log) => {
-        const newData = { ...todayData, timeLogs: [log, ...(todayData.timeLogs || [])] };
-        setTodayData(newData);
-        LocalDB.updateToday(currentDateStr, newData);
-    };
-
-    const deleteTimeLog = (id) => {
-        if(!confirm("要擦掉这条记忆吗？")) return;
-        const newData = { ...todayData, timeLogs: todayData.timeLogs.filter(l => l.id !== id) };
-        setTodayData(newData);
-        LocalDB.updateToday(currentDateStr, newData);
-    };
-
-    const confirmReset = () => {
-        const emptyData = { water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [], impulseRecords: [] };
-        setTodayData(emptyData);
-        LocalDB.updateToday(currentDateStr, emptyData);
-        LocalDB.saveTimerState(null);
-        setShowResetConfirm(false);
-        setToastMsg("新的一页开始了");
-    };
-
-    const saveNewTag = (newTagObj) => {
-        const newTags = [...settings.tags, newTagObj];
-        const newSettings = { ...settings, tags: newTags };
-        setSettings(newSettings);
-        LocalDB.saveSettings(newSettings);
-    };
-
-    // V19: 更新标签
-    const handleUpdateTag = (oldName, newName, newColor) => {
-        const newTags = settings.tags.map(t => 
-            t.name === oldName ? { ...t, name: newName, color: newColor } : t
-        );
-        const newSettings = { ...settings, tags: newTags };
-        setSettings(newSettings);
-        LocalDB.saveSettings(newSettings);
-
-        // 如果名字变了，同步更新今日的 Logs，保证饼图一致性
-        if (oldName !== newName) {
-            const newLogs = todayData.timeLogs.map(log => 
-                log.name === oldName ? { ...log, name: newName } : log
-            );
-            const newTodayData = { ...todayData, timeLogs: newLogs };
-            setTodayData(newTodayData);
-            LocalDB.updateToday(currentDateStr, newTodayData);
-        }
-    };
-
-    // V19: 删除标签
-    const handleDeleteTag = (tagName) => {
-        if(!confirm(`真的要删除标签“${tagName}”吗？`)) return;
-        const newTags = settings.tags.filter(t => t.name !== tagName);
-        const newSettings = { ...settings, tags: newTags };
-        setSettings(newSettings);
-        LocalDB.saveSettings(newSettings);
-    };
-
-    const appBgClass = (isLateNight && todayData.sleep < 1) ? 'bg-[#1a1a2e]' : 'bg-paper';
-    const textColorClass = (isLateNight && todayData.sleep < 1) ? 'text-gray-200' : 'text-ink';
-    const warmTextClass = (isLateNight && todayData.sleep < 1) ? 'text-indigo-300' : 'text-warm-600';
-
-    return (
-        <div className={`min-h-screen max-w-md mx-auto relative shadow-2xl overflow-hidden pb-28 transition-colors duration-1000 ${appBgClass}`}>
-            
-            <header className="px-6 pt-14 pb-4">
-                <div className="text-center">
-                    <h1 className={`text-3xl font-bold tracking-wide mb-1 transition-colors ${warmTextClass}`} style={{fontFamily: 'Comic Sans MS, cursive, sans-serif'}}>Deonysus</h1>
-                    <div className="inline-block bg-warm-100 px-3 py-1 rounded-full border border-warm-200">
-                        <span className="text-xs font-bold text-warm-600 tracking-widest uppercase">{currentDateStr} • Shanghai</span>
-                    </div>
-                </div>
-            </header>
-
-            <main className="px-5">
-                {activeTab === 'habits' ? (
-                    <div className="space-y-4 fade-in">
-                        {/* 顶部问候语卡片 */}
-                        <div className={`p-4 rounded-xl doodle-border relative transform rotate-1 hover:rotate-0 transition-transform duration-300 my-4 ${
-                            (isLateNight && todayData.sleep < 1) ? 'bg-indigo-900/30 border-indigo-300/30' : 'bg-[#FFFCF0]'
-                        }`}>
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-12 bg-warm-200/50 rounded-full blur-sm"></div>
-                            {(isLateNight && todayData.sleep < 1) ? (
-                                <>
-                                    <p className="text-sm font-bold text-indigo-300 mb-2 leading-relaxed flex items-center gap-2"><Icons.Moon /> 夜深了，小姑娘。</p>
-                                    <p className="text-sm text-indigo-100/70 leading-relaxed font-medium">“该回我们的卧室了。把烦恼都留在门外，被窝里只有温暖和我。快点亮‘睡前锚点’吧。”</p>
-                                </>
-                            ) : (
-                                <>
-                                    <p className="text-sm font-bold text-warm-600 mb-2 leading-relaxed">“我的小姑娘，你就是我的全部。”</p>
-                                    <p className="text-sm text-ink/70 leading-relaxed font-medium">“不要再用牙齿磨砺自己，我会用双手的爱意替你磨平所有的烦躁。这里是你的‘港湾’。你无需强大，有我在。”</p>
-                                </>
-                            )}
-                        </div>
-
-                        <div className="space-y-3">
-                            {['water', 'poop', 'spine', 'sleep'].map(key => (
-                                <HabitCard 
-                                    key={key} 
-                                    config={HABIT_CONFIG[key]} 
-                                    value={todayData[key] || 0} 
-                                    onIncrement={() => handleHabitClick(key)} 
-                                    isNight={(isLateNight && todayData.sleep < 1)}
-                                />
-                            ))}
-                        </div>
-
-                        <div className="bg-white rounded-3xl p-5 soft-shadow border-4 border-berry-100 mt-6 active:scale-[0.98] transition-transform">
-                            <div className="flex justify-between items-center mb-3">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-berry-100 flex items-center justify-center text-xl">🛡️</div>
-                                    <div>
-                                        <h3 className="font-bold text-ink text-lg">{HABIT_CONFIG.impulse.label}</h3>
-                                        <p className="text-xs text-ink/50 font-bold">{HABIT_CONFIG.impulse.desc}</p>
-                                    </div>
-                                </div>
-                                <div className="text-4xl font-bold text-berry-500 font-mono tracking-tighter">{todayData.impulse || 0}</div>
-                            </div>
-                            <button onClick={() => handleHabitClick('impulse')} className="w-full mt-2 bg-berry-500 text-white py-3 rounded-2xl font-bold border-b-4 border-rose-600 active:border-b-0 active:translate-y-1 transition-all">
-                                记录一次觉察与停顿
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 mt-8 pt-4 border-t-2 border-dashed border-warm-200 pb-2">
-                            <button onClick={() => setShowReport(true)} className="flex items-center justify-center gap-2 py-3 px-4 bg-warm-500 text-white rounded-2xl font-bold shadow-md active:scale-95 transition-transform"><Icons.Chart /> 守护报告</button>
-                            <button onClick={() => setShowResetConfirm(true)} className="flex items-center justify-center gap-2 py-3 px-4 bg-white text-ink/60 border-2 border-warm-100 rounded-2xl font-bold active:bg-warm-50 transition-colors"><Icons.Refresh /> 今日重置</button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="fade-in">
-                        <TimeTracker 
-                            logs={todayData.timeLogs || []} 
-                            onSaveLog={addTimeLog}
-                            onDeleteLog={deleteTimeLog}
-                            tags={settings.tags}
-                            onAddTag={saveNewTag}
-                            onUpdateTag={handleUpdateTag}
-                            onDeleteTag={handleDeleteTag}
-                        />
-                    </div>
-                )}
-            </main>
-
-            <nav className={`fixed bottom-0 left-0 right-0 backdrop-blur-md border-t-2 border-warm-100 flex justify-around items-center safe-area-pb z-40 max-w-md mx-auto rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.03)] transition-colors ${
-                (isLateNight && todayData.sleep < 1) ? 'bg-indigo-950/90 border-indigo-800' : 'bg-paper/90 border-warm-100'
-            }`}>
-                <button onClick={() => setActiveTab('habits')} className={`flex flex-col items-center justify-center w-full py-4 transition-colors ${activeTab === 'habits' ? 'text-warm-600' : 'text-warm-300'}`}>
-                    <div className={`p-1 rounded-xl transition-all ${activeTab === 'habits' ? 'bg-warm-100 -translate-y-1' : ''}`}><Icons.TabHabit /></div><span className="text-[10px] font-bold mt-1">习惯守护</span>
-                </button>
-                <button onClick={() => setActiveTab('time')} className={`flex flex-col items-center justify-center w-full py-4 transition-colors ${activeTab === 'time' ? 'text-warm-600' : 'text-warm-300'}`}>
-                    <div className={`p-1 rounded-xl transition-all ${activeTab === 'time' ? 'bg-warm-100 -translate-y-1' : ''}`}><Icons.TabTime /></div><span className="text-[10px] font-bold mt-1">专注记录</span>
-                </button>
-            </nav>
-
-            {showImpulseModal && (
-                <ImpulseModal onClose={() => setShowImpulseModal(false)} onConfirm={confirmImpulse} />
-            )}
-
-            {showReport && <ReportModal currentDate={currentDateStr} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
-            
-            {showResetConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-ink/20 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)}></div>
-                    <div className="bg-paper w-full max-w-xs rounded-3xl shadow-xl relative z-10 p-6 animate-[float_3s_ease-in-out_infinite] border-4 border-warm-100">
-                        <div className="mx-auto w-14 h-14 bg-berry-100 text-berry-500 rounded-full flex items-center justify-center mb-4 text-2xl">🗑️</div>
-                        <h3 className="text-xl font-bold text-center text-ink mb-2">真的要擦掉吗？</h3>
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 text-ink/60 bg-warm-100 rounded-2xl font-bold">留着吧</button>
-                            <button onClick={confirmReset} className="flex-1 py-3 text-white bg-berry-500 rounded-2xl font-bold shadow-md">擦掉</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            
-            {toastMsg && <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 bg-ink/90 text-white px-6 py-3 rounded-full shadow-lg text-sm font-bold animate-[fadeIn_0.3s_ease-out] whitespace-nowrap">{toastMsg}</div>}
         </div>
     );
 };
