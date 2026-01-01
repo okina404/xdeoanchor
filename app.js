@@ -145,7 +145,7 @@ const Icons = {
     Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 };
 
-// --- 4. 子组件定义 (必须在 App 之前定义) ---
+// --- 4. 子组件定义 ---
 
 const HabitCard = ({ config, value, onIncrement, isNight }) => {
     const isTargetReached = value >= config.max;
@@ -439,28 +439,34 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
     return (
         <div className="space-y-6 pt-4">
             <DonutChart logs={logs} tags={tags} />
-            <div className="relative flex flex-col items-center justify-center py-8">
+            <div className="relative flex flex-col items-center justify-center py-6">
+                {/* V20: 移除圆框，改为极简数字展示 */}
                 <div 
-                    className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
-                    style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }} 
+                    className={`flex flex-col items-center transition-all duration-500 ${status === 'running' ? 'scale-105' : ''}`}
                 >
-                    <div className="mb-4 relative">
-                        <div className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2">
-                            <span className="text-xs font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
-                            <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={openDialog}>
-                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
-                                <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
-                                <Icons.Tag />
-                            </div>
+                    <div className="mb-2 relative">
+                        <div 
+                            className="flex items-center gap-2 bg-paper border border-warm-200 px-4 py-1.5 rounded-full cursor-pointer hover:border-warm-400 soft-shadow transition-transform active:scale-95" 
+                            onClick={openDialog}
+                        >
+                            <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
+                            <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
+                            <Icons.Tag />
                         </div>
                     </div>
-                    <div className="text-5xl font-bold font-mono tracking-widest tabular-nums" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
+                    
+                    <div className="text-7xl font-bold font-mono tracking-widest tabular-nums my-4 transition-colors duration-500" 
+                         style={{
+                             color: status === 'running' ? currentTagColor : '#E67E22',
+                             textShadow: status === 'running' ? '0 4px 12px rgba(0,0,0,0.1)' : 'none'
+                         }}>
                         {formatTimeHHMMSS(elapsed)}
                     </div>
-                    <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
+                    
+                    <div className="text-xs font-bold text-warm-300 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
                 </div>
                 
-                <div className="flex items-center gap-6 mt-8 relative z-20">
+                <div className="flex items-center gap-6 mt-10 relative z-20">
                     {status === 'running' ? (
                         <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
                     ) : (
