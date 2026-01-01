@@ -130,8 +130,8 @@ const Icons = {
     Trash: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
     Download: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
     Upload: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-    Play: () => <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 3l14 9-14 9V3z" strokeLinejoin="round" strokeWidth="2"/></svg>,
-    Pause: () => <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>,
+    Play: () => <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 3l14 9-14 9V3z" strokeLinejoin="round" strokeWidth="2"/></svg>,
+    Pause: () => <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>,
     Stop: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="4" ry="4"></rect></svg>,
     TabHabit: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
     TabTime: () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
@@ -440,37 +440,40 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
         <div className="space-y-6 pt-4">
             <DonutChart logs={logs} tags={tags} />
             
-            {/* 这里的计时器变成了全宽卡片，和其他卡片保持一致 */}
-            <div className="relative flex flex-col items-center justify-center py-6">
+            {/* 这里的计时器变成了一个完整的一体化控制台 */}
+            <div className="relative py-4">
                 <div 
-                    className={`relative z-10 w-full p-5 bg-white rounded-3xl soft-shadow border flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
-                    style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }} 
+                    className={`relative z-10 w-full p-6 bg-white rounded-3xl soft-shadow border flex flex-col items-center justify-between transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
+                    style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4', minHeight: '300px' }} 
                 >
-                    <div className="mb-4 relative w-full px-4">
-                        <div className="flex flex-col items-center justify-center gap-1 w-full">
-                            <span className="text-[10px] font-bold text-ink/40 mb-1">当前专注</span>
-                            <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1.5 rounded-full cursor-pointer hover:border-warm-400" onClick={openDialog}>
+                    {/* 上部分：标签和状态 */}
+                    <div className="w-full flex justify-between items-start mb-2">
+                         <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1.5 rounded-full cursor-pointer hover:border-warm-400" onClick={openDialog}>
                                 <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
                                 <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
                                 <Icons.Tag />
-                            </div>
+                         </div>
+                         <div className="text-xs font-bold text-warm-300 uppercase tracking-widest py-1.5">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
+                    </div>
+
+                    {/* 中部分：时间 */}
+                    <div className="flex-1 flex items-center justify-center py-4">
+                        <div className="text-6xl font-bold font-mono tracking-widest tabular-nums" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
+                            {formatTimeHHMMSS(elapsed)}
                         </div>
                     </div>
-                    <div className="text-5xl font-bold font-mono tracking-widest tabular-nums mb-2" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
-                        {formatTimeHHMMSS(elapsed)}
+                    
+                    {/* 下部分：按钮组 (直接在卡片内) */}
+                    <div className="flex items-center gap-6 mt-2 relative z-20 w-full justify-center">
+                        {status === 'running' ? (
+                            <button onClick={handlePause} className="w-20 h-20 p-5 rounded-full bg-amber-100 text-amber-500 border-4 border-white shadow-lg active:scale-95 transition-all flex items-center justify-center"><Icons.Pause /></button>
+                        ) : (
+                            <button onClick={handleStart} className="w-20 h-20 p-5 rounded-full bg-warm-500 text-white border-4 border-white shadow-xl active:scale-95 transition-all flex items-center justify-center"><Icons.Play /></button>
+                        )}
+                        {(status === 'running' || status === 'paused') && (
+                            <button onClick={handleStop} className="w-16 h-16 p-4 rounded-full bg-warm-50 text-warm-400 border-4 border-white shadow-md active:scale-95 transition-all flex items-center justify-center"><Icons.Stop /></button>
+                        )}
                     </div>
-                    <div className="text-xs font-bold text-warm-300 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
-                </div>
-                
-                <div className="flex items-center gap-6 mt-6 relative z-20">
-                    {status === 'running' ? (
-                        <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
-                    ) : (
-                        <button onClick={handleStart} className="w-18 h-18 p-4 rounded-2xl bg-warm-500 text-white border-b-4 border-warm-600 active:border-b-0 active:translate-y-1 transition-all shadow-lg shadow-warm-200"><Icons.Play /></button>
-                    )}
-                    {(status === 'running' || status === 'paused') && (
-                        <button onClick={handleStop} className="w-18 h-18 p-4 rounded-2xl bg-white text-ink/40 border-b-4 border-warm-100 active:border-b-0 active:translate-y-1 transition-all"><Icons.Stop /></button>
-                    )}
                 </div>
             </div>
 
