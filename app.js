@@ -1,9 +1,21 @@
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
 const TIMER_STATE_KEY = 'deonysus_active_timer_v1';
 const SETTINGS_KEY = 'deonysus_settings_v1';
+
+// 预设调色盘 (温柔系)
+const COLOR_PALETTE = [
+    '#FF6B6B', // 红
+    '#54A0FF', // 蓝
+    '#1DD1A1', // 绿
+    '#FECA57', // 黄
+    '#5F27CD', // 紫
+    '#FF9F43', // 橙
+    '#48DBFB', // 青
+    '#8395A7'  // 灰
+];
 
 const LocalDB = {
     getAll: () => {
@@ -13,7 +25,6 @@ const LocalDB = {
     
     getToday: (dateKey) => {
         const all = LocalDB.getAll();
-        // 增加 impulseRecords 用于存储冲动详情
         const day = all[dateKey] || { water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [], impulseRecords: [] };
         if (!day.timeLogs) day.timeLogs = [];
         if (!day.impulseRecords) day.impulseRecords = [];
@@ -33,10 +44,30 @@ const LocalDB = {
     },
     getSettings: () => {
         try { 
-            return JSON.parse(localStorage.getItem(SETTINGS_KEY) || JSON.stringify({
-                tags: ['工作', '学习', '阅读', '运动', '发呆']
-            })); 
-        } catch { return { tags: ['工作', '学习', '阅读', '运动'] }; }
+            let settings = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+            if (!settings) {
+                settings = { tags: [
+                    { name: '工作', color: COLOR_PALETTE[0] },
+                    { name: '学习', color: COLOR_PALETTE[1] },
+                    { name: '阅读', color: COLOR_PALETTE[2] },
+                    { name: '运动', color: COLOR_PALETTE[3] }
+                ]};
+            }
+            // 数据迁移：如果旧标签是字符串，转为对象
+            if (settings.tags.length > 0 && typeof settings.tags[0] === 'string') {
+                settings.tags = settings.tags.map((t, i) => ({
+                    name: t,
+                    color: COLOR_PALETTE[i % COLOR_PALETTE.length]
+                }));
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+            }
+            return settings;
+        } catch { 
+            return { tags: [
+                { name: '工作', color: COLOR_PALETTE[0] },
+                { name: '学习', color: COLOR_PALETTE[1] }
+            ] }; 
+        }
     },
     saveSettings: (settings) => {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -117,24 +148,23 @@ const App = () => {
     const [todayData, setTodayData] = useState({ water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [], impulseRecords: [] });
     const [showReport, setShowReport] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
-    const [showImpulseModal, setShowImpulseModal] = useState(false); // 新增：冲动记录弹窗
+    const [showImpulseModal, setShowImpulseModal] = useState(false);
     const [toastMsg, setToastMsg] = useState(null);
     const [currentDateStr, setCurrentDateStr] = useState(getShanghaiDate());
     const [settings, setSettings] = useState(LocalDB.getSettings());
-    const [isLateNight, setIsLateNight] = useState(false); // 新增：深夜状态
+    const [isLateNight, setIsLateNight] = useState(false);
 
     useEffect(() => {
         const nowStr = getShanghaiDate();
         setCurrentDateStr(nowStr);
         setTodayData(LocalDB.getToday(nowStr));
         
-        // 检查时间是否晚于 23:00
         const checkTime = () => {
             const hour = new Date().getHours();
-            setIsLateNight(hour >= 23 || hour < 5); // 晚上11点到凌晨5点
+            setIsLateNight(hour >= 23 || hour < 5);
         };
         checkTime();
-        const timer = setInterval(checkTime, 60000); // 每分钟检查一次
+        const timer = setInterval(checkTime, 60000);
         return () => clearInterval(timer);
     }, []);
 
@@ -147,7 +177,7 @@ const App = () => {
 
     const handleHabitClick = (key) => {
         if (key === 'impulse') {
-            setShowImpulseModal(true); // 冲动习惯特殊处理：打开弹窗
+            setShowImpulseModal(true);
         } else {
             updateHabit(key, 1);
         }
@@ -161,7 +191,6 @@ const App = () => {
         
         let newData = { ...todayData, [key]: newVal };
         
-        // 如果有额外数据（比如冲动记录）
         if (extraData && key === 'impulse') {
             const newRecord = { id: Date.now(), note: extraData.note, timestamp: Date.now() };
             newData.impulseRecords = [newRecord, ...(todayData.impulseRecords || [])];
@@ -199,14 +228,13 @@ const App = () => {
         setToastMsg("新的一页开始了");
     };
 
-    const saveNewTag = (newTag) => {
-        const newTags = [...settings.tags, newTag];
+    const saveNewTag = (newTagObj) => {
+        const newTags = [...settings.tags, newTagObj];
         const newSettings = { ...settings, tags: newTags };
         setSettings(newSettings);
         LocalDB.saveSettings(newSettings);
     };
 
-    // 深夜模式样式覆盖
     const appBgClass = (isLateNight && todayData.sleep < 1) ? 'bg-[#1a1a2e]' : 'bg-paper';
     const textColorClass = (isLateNight && todayData.sleep < 1) ? 'text-gray-200' : 'text-ink';
     const warmTextClass = (isLateNight && todayData.sleep < 1) ? 'text-indigo-300' : 'text-warm-600';
@@ -256,7 +284,6 @@ const App = () => {
                             ))}
                         </div>
 
-                        {/* 冲动记录卡片 */}
                         <div className="bg-white rounded-3xl p-5 soft-shadow border-4 border-berry-100 mt-6 active:scale-[0.98] transition-transform">
                             <div className="flex justify-between items-center mb-3">
                                 <div className="flex items-center gap-3">
@@ -302,7 +329,6 @@ const App = () => {
                 </button>
             </nav>
 
-            {/* 冲动记录弹窗 */}
             {showImpulseModal && (
                 <ImpulseModal onClose={() => setShowImpulseModal(false)} onConfirm={confirmImpulse} />
             )}
@@ -328,7 +354,6 @@ const App = () => {
     );
 };
 
-// --- 新组件：冲动记录弹窗 ---
 const ImpulseModal = ({ onClose, onConfirm }) => {
     const [note, setNote] = useState('');
     return (
@@ -337,7 +362,6 @@ const ImpulseModal = ({ onClose, onConfirm }) => {
             <div className="bg-white w-full max-w-xs rounded-3xl shadow-2xl relative z-10 p-5 animate-breathe border-4 border-berry-100">
                 <h3 className="text-lg font-bold text-ink mb-1">接住你了</h3>
                 <p className="text-xs text-ink/50 mb-4 font-bold">告诉我，发生了什么？（不想说也没关系）</p>
-                
                 <textarea 
                     className="w-full bg-warm-50 border border-warm-200 rounded-xl p-3 text-sm outline-none focus:border-berry-300 transition-colors mb-4 h-24 resize-none"
                     placeholder="比如：焦虑、无聊、牙痒痒..."
@@ -345,7 +369,6 @@ const ImpulseModal = ({ onClose, onConfirm }) => {
                     onChange={(e) => setNote(e.target.value)}
                     autoFocus
                 />
-                
                 <div className="flex gap-2">
                     <button onClick={() => onConfirm('')} className="flex-1 py-3 text-berry-400 bg-white border border-berry-100 rounded-xl font-bold text-xs">只记数字</button>
                     <button onClick={() => onConfirm(note)} className="flex-[2] py-3 text-white bg-berry-500 rounded-xl font-bold shadow-md text-sm">记下来</button>
@@ -355,12 +378,104 @@ const ImpulseModal = ({ onClose, onConfirm }) => {
     );
 };
 
-// --- 专注计时器 (保留性能优化版) ---
+// --- 圆环饼图组件 ---
+const DonutChart = ({ logs, tags }) => {
+    const totalDuration = logs.reduce((acc, log) => acc + log.duration, 0);
+    
+    if (totalDuration === 0) return (
+        <div className="flex flex-col items-center justify-center py-8 text-warm-300">
+            <div className="w-32 h-32 rounded-full border-4 border-warm-100 mb-2 flex items-center justify-center">
+                <span className="text-2xl opacity-20">🕒</span>
+            </div>
+            <span className="text-xs font-bold">今天还没有开始专注哦</span>
+        </div>
+    );
+
+    // 聚合数据
+    const tagDurations = {};
+    logs.forEach(log => {
+        tagDurations[log.name] = (tagDurations[log.name] || 0) + log.duration;
+    });
+
+    // 计算切片
+    let cumulativePercent = 0;
+    const slices = Object.entries(tagDurations).map(([tagName, duration]) => {
+        const percent = duration / totalDuration;
+        const startP = cumulativePercent;
+        cumulativePercent += percent;
+        
+        // 查找颜色
+        const tagConfig = tags.find(t => t.name === tagName);
+        const color = tagConfig ? tagConfig.color : '#E0E0E0';
+        
+        return { name: tagName, percent, startP, color };
+    }).sort((a,b) => b.percent - a.percent); // 排序让大的在前面
+
+    // SVG 参数
+    const size = 160;
+    const strokeWidth = 25;
+    const radius = (size - strokeWidth) / 2;
+    const center = size / 2;
+    const circumference = 2 * Math.PI * radius;
+
+    return (
+        <div className="flex items-center gap-6 bg-white p-5 rounded-3xl soft-shadow border border-warm-50 mb-6">
+            <div className="relative w-32 h-32 flex-shrink-0">
+                <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
+                    {/* 背景圈 */}
+                    <circle cx={center} cy={center} r={radius} fill="none" stroke="#FFF0D4" strokeWidth={strokeWidth} />
+                    {/* 数据圈 */}
+                    {slices.map((slice, i) => (
+                        <circle
+                            key={i}
+                            cx={center}
+                            cy={center}
+                            r={radius}
+                            fill="none"
+                            stroke={slice.color}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray={circumference}
+                            strokeDashoffset={circumference * (1 - slice.percent)}
+                            // 旋转每个切片到正确位置 (dashoffset 是从起点开始算的，所以这里利用 rotate 来定位)
+                            // 修正：利用 stroke-dashoffset 的特性，只需累加偏移量即可，但 SVG 圆形 stroke 比较特殊。
+                            // 更简单的做法：使用 path 或者叠加 circle 并旋转。这里使用叠加 circle + rotate。
+                            style={{ 
+                                transition: 'all 0.5s ease-out',
+                                transformOrigin: 'center',
+                                transform: `rotate(${slice.startP * 360}deg)`
+                            }}
+                        />
+                    ))}
+                    {/* 中间文字 */}
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none rotate-0">
+                    <span className="text-xs font-bold text-warm-300">总专注</span>
+                    <span className="text-lg font-bold font-mono text-warm-600">{formatSmartDuration(totalDuration).replace('h','小时').replace('m','分钟')}</span>
+                </div>
+            </div>
+            
+            <div className="flex-1 space-y-2 max-h-32 overflow-y-auto">
+                {slices.map((slice, i) => (
+                    <div key={i} className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: slice.color}}></div>
+                            <span className="font-bold text-ink/80">{slice.name}</span>
+                        </div>
+                        <span className="font-mono text-warm-400 font-bold">{Math.round(slice.percent * 100)}%</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// --- 专注计时器 (V18.0) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     const [status, setStatus] = useState('idle');
     const [elapsed, setElapsed] = useState(0);
-    const [selectedTag, setSelectedTag] = useState(tags[0]);
+    const [selectedTag, setSelectedTag] = useState(tags[0] || {name:'默认', color:'#ccc'}); // 存对象
     const [customTagInput, setCustomTagInput] = useState('');
+    const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]); // 新增颜色选择
     const [isAddingTag, setIsAddingTag] = useState(false);
     const timerRef = useRef(null);
 
@@ -368,7 +483,11 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     useEffect(() => {
         const saved = LocalDB.getTimerState();
         if (saved) {
-            setSelectedTag(saved.tag || tags[0]);
+            // 恢复时需要根据名字找到完整的 tag 对象（包含颜色）
+            const savedTagName = typeof saved.tag === 'string' ? saved.tag : saved.tag.name;
+            const foundTag = tags.find(t => t.name === savedTagName) || tags[0];
+            setSelectedTag(foundTag);
+            
             if (saved.status === 'running') {
                 const now = Date.now();
                 const diff = Math.floor((now - saved.lastTick) / 1000);
@@ -379,7 +498,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                 setStatus(saved.status);
             }
         }
-    }, []);
+    }, [tags]); // 依赖 tags，因为初始化可能 tags 还没加载好
 
     // 唤醒校准 & 状态保存
     useEffect(() => {
@@ -393,7 +512,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                 }
             } else {
                 if (status === 'running' || status === 'paused') {
-                    LocalDB.saveTimerState({ status, elapsed, lastTick: Date.now(), tag: selectedTag });
+                    LocalDB.saveTimerState({ status, elapsed, lastTick: Date.now(), tag: selectedTag.name });
                 }
             }
         };
@@ -415,19 +534,15 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 
     useEffect(() => {
         if (status === 'running' || status === 'paused') {
-             LocalDB.saveTimerState({ status, elapsed, lastTick: Date.now(), tag: selectedTag });
+             LocalDB.saveTimerState({ status, elapsed, lastTick: Date.now(), tag: selectedTag.name });
         }
     }, [status, selectedTag]);
 
-    const handleStart = () => {
-        setStatus('running');
-    };
-    const handlePause = () => {
-        setStatus('paused');
-    };
+    const handleStart = () => setStatus('running');
+    const handlePause = () => setStatus('paused');
     const handleStop = () => {
         if (elapsed > 5) {
-            onSaveLog({ id: Date.now(), name: selectedTag, duration: elapsed, timestamp: Date.now() });
+            onSaveLog({ id: Date.now(), name: selectedTag.name, duration: elapsed, timestamp: Date.now() });
         }
         setStatus('idle');
         setElapsed(0);
@@ -436,47 +551,47 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 
     const handleAddNewTag = () => {
         if (customTagInput.trim()) {
-            onAddTag(customTagInput.trim());
-            setSelectedTag(customTagInput.trim());
+            const newTag = { name: customTagInput.trim(), color: selectedColor };
+            onAddTag(newTag);
+            setSelectedTag(newTag);
             setCustomTagInput('');
             setIsAddingTag(false);
+            document.getElementById('tag-dialog').close();
         }
     };
 
+    const currentTagColor = selectedTag ? selectedTag.color : '#ccc';
+
     return (
         <div className="space-y-6 pt-4">
+            
+            {/* 新增：专注分布图 */}
+            <DonutChart logs={logs} tags={tags} />
+
             <div className="relative flex flex-col items-center justify-center py-8">
-                <div className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'border-warm-300 animate-breathe' : 'border-warm-100'}`}>
+                {/* 计时器圆环，使用选中的标签颜色 */}
+                <div 
+                    className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
+                    style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }} // 动态颜色
+                >
                     <div className="mb-4 relative">
-                        {isAddingTag ? (
-                            <div className="flex items-center gap-1">
-                                <input 
-                                    autoFocus
-                                    className="w-20 text-center text-sm border-b-2 border-warm-300 outline-none bg-transparent"
-                                    value={customTagInput}
-                                    onChange={e => setCustomTagInput(e.target.value)}
-                                    onBlur={handleAddNewTag}
-                                    placeholder="新标签"
-                                />
+                        <div 
+                            className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2"
+                        >
+                            <span className="text-xs font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
+                            <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={() => status === 'idle' && document.getElementById('tag-dialog').showModal()}>
+                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
+                                <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
+                                <Icons.Tag />
                             </div>
-                        ) : (
-                            <div 
-                                onClick={() => status === 'idle' && setIsAddingTag(false)} 
-                                className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2"
-                            >
-                                <span className="text-xs font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
-                                <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={() => document.getElementById('tag-dialog').showModal()}>
-                                    <span className="text-sm font-bold text-ink">{selectedTag}</span>
-                                    <Icons.Tag />
-                                </div>
-                            </div>
-                        )}
+                        </div>
                     </div>
-                    <div className="text-5xl font-bold font-mono tracking-widest tabular-nums text-warm-600">
+                    <div className="text-5xl font-bold font-mono tracking-widest tabular-nums" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
                         {formatTimeHHMMSS(elapsed)}
                     </div>
                     <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
                 </div>
+                
                 <div className="flex items-center gap-6 mt-8 relative z-20">
                     {status === 'running' ? (
                         <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
@@ -493,25 +608,36 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                 <div className="bg-white p-5 w-72">
                     <h3 className="text-lg font-bold text-ink mb-3">选择标签</h3>
                     <div className="flex flex-wrap gap-2 mb-4">
-                        {tags.map(t => (
+                        {tags.map((t, i) => (
                             <button 
-                                key={t} 
+                                key={i} 
                                 onClick={() => { setSelectedTag(t); document.getElementById('tag-dialog').close(); }}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 ${selectedTag === t ? 'bg-warm-100 border-warm-400 text-warm-700' : 'bg-white border-warm-100 text-ink/60'}`}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 flex items-center gap-2 ${selectedTag.name === t.name ? 'bg-warm-100 border-warm-400 text-warm-700' : 'bg-white border-warm-100 text-ink/60'}`}
                             >
-                                {t}
+                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: t.color}}></div>
+                                {t.name}
                             </button>
                         ))}
                     </div>
                     <div className="border-t border-dashed border-warm-200 pt-3">
+                        <div className="text-xs font-bold text-warm-300 mb-2">新建标签颜色</div>
+                        <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+                            {COLOR_PALETTE.map(c => (
+                                <button 
+                                    key={c} 
+                                    onClick={() => setSelectedColor(c)}
+                                    className={`w-6 h-6 rounded-full flex-shrink-0 transition-transform ${selectedColor === c ? 'scale-125 ring-2 ring-offset-1 ring-warm-300' : ''}`}
+                                    style={{backgroundColor: c}}
+                                />
+                            ))}
+                        </div>
                         <input 
                             className="w-full bg-paper px-3 py-2 rounded-xl border border-warm-200 text-sm outline-none focus:border-warm-400"
-                            placeholder="+ 新增标签 (回车保存)"
+                            placeholder="输入新标签名 (回车保存)"
+                            value={customTagInput}
+                            onChange={e => setCustomTagInput(e.target.value)}
                             onKeyDown={(e) => {
-                                if(e.key === 'Enter' && e.target.value.trim()) {
-                                    onAddTag(e.target.value.trim());
-                                    e.target.value = '';
-                                }
+                                if(e.key === 'Enter' && customTagInput.trim()) handleAddNewTag();
                             }}
                         />
                     </div>
@@ -522,20 +648,26 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
             <div className="bg-white rounded-3xl p-5 soft-shadow border border-warm-50">
                 <div className="flex justify-between items-end px-2 mb-4 border-b border-dashed border-warm-100 pb-2">
                     <h3 className="font-bold text-ink">今天的足迹</h3>
-                    <span className="text-xs font-bold text-warm-400">共 {formatDuration(logs.reduce((acc, curr) => acc + curr.duration, 0))}</span>
                 </div>
                 <div className="space-y-3">
-                    {logs.length === 0 ? <div className="text-center py-8 text-warm-300 font-bold text-sm">还没有留下脚印哦</div> : logs.map(log => (
-                        <div key={log.id} className="bg-paper p-3 rounded-2xl border border-warm-100 flex justify-between items-center">
-                            <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-bold text-ink/80">{log.name}</span>
+                    {logs.length === 0 ? <div className="text-center py-8 text-warm-300 font-bold text-sm">还没有留下脚印哦</div> : logs.map(log => {
+                        // 查找对应的颜色
+                        const tagConfig = tags.find(t => t.name === log.name);
+                        const tagColor = tagConfig ? tagConfig.color : '#ccc';
+                        
+                        return (
+                            <div key={log.id} className="bg-paper p-3 rounded-2xl border border-warm-100 flex justify-between items-center">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: tagColor}}></div>
+                                        <span className="font-bold text-ink/80">{log.name}</span>
+                                    </div>
+                                    <div className="text-[10px] font-bold text-warm-300 mt-1 pl-4">{new Date(log.timestamp).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})}</div>
                                 </div>
-                                <div className="text-[10px] font-bold text-warm-300 mt-1">{new Date(log.timestamp).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})}</div>
+                                <div className="flex items-center gap-3"><span className="font-mono text-warm-600 font-bold bg-warm-100 px-2 py-1 rounded-lg text-xs">{formatDuration(log.duration)}</span><button onClick={() => onDeleteLog(log.id)} className="text-warm-200 hover:text-berry-500 p-2 transition-colors"><Icons.Trash /></button></div>
                             </div>
-                            <div className="flex items-center gap-3"><span className="font-mono text-warm-600 font-bold bg-warm-100 px-2 py-1 rounded-lg text-xs">{formatDuration(log.duration)}</span><button onClick={() => onDeleteLog(log.id)} className="text-warm-200 hover:text-berry-500 p-2 transition-colors"><Icons.Trash /></button></div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -580,7 +712,6 @@ const HabitCard = ({ config, value, onIncrement, isNight }) => {
     );
 };
 
-// --- ReportModal 组件 ---
 const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'stats'
     const [selectedDateData, setSelectedDateData] = useState(null);
@@ -619,7 +750,6 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
     };
     const handleDayClick = (dayData) => { if (dayData) setSelectedDateData(dayData); };
 
-    // --- 统计模式逻辑 ---
     useEffect(() => {
         if (viewMode === 'stats') {
             const reportDays = [];
@@ -639,14 +769,12 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
         }
     }, [viewMode, range]);
 
-    // --- 通用数据处理 ---
     const handleExportCSV = () => {
         let csvContent = "\uFEFF日期,饮水,顺畅,脊柱,睡眠,冲动记录,总专注(分),详情,冲动备注\n";
         Object.keys(allData).sort().reverse().forEach(date => {
             const d = allData[date];
             const focus = (d.timeLogs||[]).reduce((a,c)=>a+c.duration,0)/60;
             const details = (d.timeLogs||[]).map(l=>`${l.name}(${Math.round(l.duration/60)}m)`).join('; ');
-            // 导出冲动备注
             const impulseNotes = (d.impulseRecords||[]).map(r => r.note).filter(n=>n).join('; ');
             
             csvContent += `${date},${d.water||0},${d.poop||0},${d.spine||0},${d.sleep||0},${d.impulse||0},${focus.toFixed(1)},"${details}","${impulseNotes}"\n`;
