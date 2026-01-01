@@ -13,8 +13,10 @@ const LocalDB = {
     
     getToday: (dateKey) => {
         const all = LocalDB.getAll();
-        const day = all[dateKey] || { water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [] };
+        // 增加 impulseRecords 用于存储冲动详情
+        const day = all[dateKey] || { water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [], impulseRecords: [] };
         if (!day.timeLogs) day.timeLogs = [];
+        if (!day.impulseRecords) day.impulseRecords = [];
         return day;
     },
     updateToday: (dateKey, newData) => {
@@ -50,43 +52,6 @@ const LocalDB = {
                 return { success: true, type: 'JSON', count: Object.keys(jsonData.logs).length };
             }
         } catch (e) {}
-
-        try {
-            const lines = fileContent.split('\n');
-            let successCount = 0;
-            const currentData = LocalDB.getAll();
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                const cols = line.split(',');
-                const date = cols[0] ? cols[0].trim() : null;
-                if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-                    const water = parseInt(cols[1]) || 0;
-                    const poop = parseInt(cols[2]) || 0;
-                    const spine = parseInt(cols[3]) || 0;
-                    const sleep = parseInt(cols[4]) || 0;
-                    const impulse = parseInt(cols[5]) || 0;
-                    let timeLogs = currentData[date]?.timeLogs || [];
-                    if (cols[6] && parseFloat(cols[6]) > 0) {
-                        const alreadyHasImport = timeLogs.some(l => l.name === '历史导入数据');
-                        if (!alreadyHasImport) {
-                            timeLogs.push({
-                                id: Date.now() + i,
-                                name: '历史导入数据',
-                                duration: Math.floor(parseFloat(cols[6]) * 60),
-                                timestamp: new Date(date).getTime() + 43200000
-                            });
-                        }
-                    }
-                    currentData[date] = { water, poop, spine, sleep, impulse, timeLogs, lastUpdate: Date.now() };
-                    successCount++;
-                }
-            }
-            if (successCount > 0) {
-                LocalDB.saveAll(currentData);
-                return { success: true, type: 'CSV', count: successCount };
-            }
-        } catch (e) {}
         return { success: false };
     }
 };
@@ -108,15 +73,10 @@ const formatDuration = (seconds) => {
     const m = Math.floor(seconds / 60);
     return `${m}m`;
 };
-// 智能格式化小时/分钟
 const formatSmartDuration = (seconds) => {
     const m = seconds / 60;
     if (m < 60) return `${m.toFixed(1)}m`;
     return `${(m / 60).toFixed(1)}h`;
-};
-// 震动反馈辅助函数
-const vibrate = () => {
-    if (navigator.vibrate) navigator.vibrate(50);
 };
 
 // --- 3. 习惯配置 ---
@@ -147,23 +107,35 @@ const Icons = {
     Left: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
     Right: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
     Calendar: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
-    List: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    List: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
+    Moon: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
 };
 
 // --- 5. 主程序 ---
 const App = () => {
     const [activeTab, setActiveTab] = useState('habits');
-    const [todayData, setTodayData] = useState({ water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [] });
+    const [todayData, setTodayData] = useState({ water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [], impulseRecords: [] });
     const [showReport, setShowReport] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [showImpulseModal, setShowImpulseModal] = useState(false); // 新增：冲动记录弹窗
     const [toastMsg, setToastMsg] = useState(null);
     const [currentDateStr, setCurrentDateStr] = useState(getShanghaiDate());
     const [settings, setSettings] = useState(LocalDB.getSettings());
+    const [isLateNight, setIsLateNight] = useState(false); // 新增：深夜状态
 
     useEffect(() => {
         const nowStr = getShanghaiDate();
         setCurrentDateStr(nowStr);
         setTodayData(LocalDB.getToday(nowStr));
+        
+        // 检查时间是否晚于 23:00
+        const checkTime = () => {
+            const hour = new Date().getHours();
+            setIsLateNight(hour >= 23 || hour < 5); // 晚上11点到凌晨5点
+        };
+        checkTime();
+        const timer = setInterval(checkTime, 60000); // 每分钟检查一次
+        return () => clearInterval(timer);
     }, []);
 
     useEffect(() => {
@@ -173,16 +145,36 @@ const App = () => {
         }
     }, [toastMsg]);
 
-    const updateHabit = (key, delta) => {
-        vibrate(); // 增加震动反馈
+    const handleHabitClick = (key) => {
+        if (key === 'impulse') {
+            setShowImpulseModal(true); // 冲动习惯特殊处理：打开弹窗
+        } else {
+            updateHabit(key, 1);
+        }
+    };
+
+    const updateHabit = (key, delta, extraData = null) => {
         const currentVal = todayData[key] || 0;
         let newVal = currentVal + delta;
         if (newVal < 0) newVal = 0;
         if (HABIT_CONFIG[key].type === 'count' && newVal > HABIT_CONFIG[key].max) return;
         
-        const newData = { ...todayData, [key]: newVal };
+        let newData = { ...todayData, [key]: newVal };
+        
+        // 如果有额外数据（比如冲动记录）
+        if (extraData && key === 'impulse') {
+            const newRecord = { id: Date.now(), note: extraData.note, timestamp: Date.now() };
+            newData.impulseRecords = [newRecord, ...(todayData.impulseRecords || [])];
+        }
+
         setTodayData(newData);
         LocalDB.updateToday(currentDateStr, newData);
+    };
+
+    const confirmImpulse = (note) => {
+        updateHabit('impulse', 1, { note });
+        setShowImpulseModal(false);
+        setToastMsg(note ? "我也听到了。" : "觉察已记录");
     };
 
     const addTimeLog = (log) => {
@@ -199,7 +191,7 @@ const App = () => {
     };
 
     const confirmReset = () => {
-        const emptyData = { water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [] };
+        const emptyData = { water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [], impulseRecords: [] };
         setTodayData(emptyData);
         LocalDB.updateToday(currentDateStr, emptyData);
         LocalDB.saveTimerState(null);
@@ -214,12 +206,17 @@ const App = () => {
         LocalDB.saveSettings(newSettings);
     };
 
+    // 深夜模式样式覆盖
+    const appBgClass = (isLateNight && todayData.sleep < 1) ? 'bg-[#1a1a2e]' : 'bg-paper';
+    const textColorClass = (isLateNight && todayData.sleep < 1) ? 'text-gray-200' : 'text-ink';
+    const warmTextClass = (isLateNight && todayData.sleep < 1) ? 'text-indigo-300' : 'text-warm-600';
+
     return (
-        <div className="min-h-screen max-w-md mx-auto relative shadow-2xl overflow-hidden pb-28 bg-paper">
+        <div className={`min-h-screen max-w-md mx-auto relative shadow-2xl overflow-hidden pb-28 transition-colors duration-1000 ${appBgClass}`}>
             
             <header className="px-6 pt-14 pb-4">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-warm-600 tracking-wide mb-1" style={{fontFamily: 'Comic Sans MS, cursive, sans-serif'}}>Deonysus</h1>
+                    <h1 className={`text-3xl font-bold tracking-wide mb-1 transition-colors ${warmTextClass}`} style={{fontFamily: 'Comic Sans MS, cursive, sans-serif'}}>Deonysus</h1>
                     <div className="inline-block bg-warm-100 px-3 py-1 rounded-full border border-warm-200">
                         <span className="text-xs font-bold text-warm-600 tracking-widest uppercase">{currentDateStr} • Shanghai</span>
                     </div>
@@ -229,18 +226,37 @@ const App = () => {
             <main className="px-5">
                 {activeTab === 'habits' ? (
                     <div className="space-y-4 fade-in">
-                        <div className="bg-[#FFFCF0] p-4 rounded-xl doodle-border relative transform rotate-1 hover:rotate-0 transition-transform duration-300 my-4">
+                        {/* 顶部问候语卡片 */}
+                        <div className={`p-4 rounded-xl doodle-border relative transform rotate-1 hover:rotate-0 transition-transform duration-300 my-4 ${
+                            (isLateNight && todayData.sleep < 1) ? 'bg-indigo-900/30 border-indigo-300/30' : 'bg-[#FFFCF0]'
+                        }`}>
                             <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-12 bg-warm-200/50 rounded-full blur-sm"></div>
-                            <p className="text-sm font-bold text-warm-600 mb-2 leading-relaxed">“我的小姑娘，你就是我的全部。”</p>
-                            <p className="text-sm text-ink/70 leading-relaxed font-medium">“不要再用牙齿磨砺自己，我会用双手的爱意替你磨平所有的烦躁。放下所有的防备和焦虑，这里是你的‘港湾’。你无需强大，有我在。”</p>
+                            {(isLateNight && todayData.sleep < 1) ? (
+                                <>
+                                    <p className="text-sm font-bold text-indigo-300 mb-2 leading-relaxed flex items-center gap-2"><Icons.Moon /> 夜深了，小姑娘。</p>
+                                    <p className="text-sm text-indigo-100/70 leading-relaxed font-medium">“该回我们的卧室了。把烦恼都留在门外，被窝里只有温暖和我。快点亮‘睡前锚点’吧。”</p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-sm font-bold text-warm-600 mb-2 leading-relaxed">“我的小姑娘，你就是我的全部。”</p>
+                                    <p className="text-sm text-ink/70 leading-relaxed font-medium">“不要再用牙齿磨砺自己，我会用双手的爱意替你磨平所有的烦躁。这里是你的‘港湾’。你无需强大，有我在。”</p>
+                                </>
+                            )}
                         </div>
 
                         <div className="space-y-3">
                             {['water', 'poop', 'spine', 'sleep'].map(key => (
-                                <HabitCard key={key} config={HABIT_CONFIG[key]} value={todayData[key] || 0} onIncrement={() => updateHabit(key, 1)} />
+                                <HabitCard 
+                                    key={key} 
+                                    config={HABIT_CONFIG[key]} 
+                                    value={todayData[key] || 0} 
+                                    onIncrement={() => handleHabitClick(key)} 
+                                    isNight={(isLateNight && todayData.sleep < 1)}
+                                />
                             ))}
                         </div>
 
+                        {/* 冲动记录卡片 */}
                         <div className="bg-white rounded-3xl p-5 soft-shadow border-4 border-berry-100 mt-6 active:scale-[0.98] transition-transform">
                             <div className="flex justify-between items-center mb-3">
                                 <div className="flex items-center gap-3">
@@ -252,7 +268,7 @@ const App = () => {
                                 </div>
                                 <div className="text-4xl font-bold text-berry-500 font-mono tracking-tighter">{todayData.impulse || 0}</div>
                             </div>
-                            <button onClick={() => updateHabit('impulse', 1)} className="w-full mt-2 bg-berry-500 text-white py-3 rounded-2xl font-bold border-b-4 border-rose-600 active:border-b-0 active:translate-y-1 transition-all">
+                            <button onClick={() => handleHabitClick('impulse')} className="w-full mt-2 bg-berry-500 text-white py-3 rounded-2xl font-bold border-b-4 border-rose-600 active:border-b-0 active:translate-y-1 transition-all">
                                 记录一次觉察与停顿
                             </button>
                         </div>
@@ -275,7 +291,9 @@ const App = () => {
                 )}
             </main>
 
-            <nav className="fixed bottom-0 left-0 right-0 bg-paper/90 backdrop-blur-md border-t-2 border-warm-100 flex justify-around items-center safe-area-pb z-40 max-w-md mx-auto rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
+            <nav className={`fixed bottom-0 left-0 right-0 backdrop-blur-md border-t-2 border-warm-100 flex justify-around items-center safe-area-pb z-40 max-w-md mx-auto rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.03)] transition-colors ${
+                (isLateNight && todayData.sleep < 1) ? 'bg-indigo-950/90 border-indigo-800' : 'bg-paper/90 border-warm-100'
+            }`}>
                 <button onClick={() => setActiveTab('habits')} className={`flex flex-col items-center justify-center w-full py-4 transition-colors ${activeTab === 'habits' ? 'text-warm-600' : 'text-warm-300'}`}>
                     <div className={`p-1 rounded-xl transition-all ${activeTab === 'habits' ? 'bg-warm-100 -translate-y-1' : ''}`}><Icons.TabHabit /></div><span className="text-[10px] font-bold mt-1">习惯守护</span>
                 </button>
@@ -283,6 +301,11 @@ const App = () => {
                     <div className={`p-1 rounded-xl transition-all ${activeTab === 'time' ? 'bg-warm-100 -translate-y-1' : ''}`}><Icons.TabTime /></div><span className="text-[10px] font-bold mt-1">专注记录</span>
                 </button>
             </nav>
+
+            {/* 冲动记录弹窗 */}
+            {showImpulseModal && (
+                <ImpulseModal onClose={() => setShowImpulseModal(false)} onConfirm={confirmImpulse} />
+            )}
 
             {showReport && <ReportModal currentDate={currentDateStr} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
             
@@ -305,7 +328,34 @@ const App = () => {
     );
 };
 
-// --- 专注计时器 (优化版) ---
+// --- 新组件：冲动记录弹窗 ---
+const ImpulseModal = ({ onClose, onConfirm }) => {
+    const [note, setNote] = useState('');
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="bg-white w-full max-w-xs rounded-3xl shadow-2xl relative z-10 p-5 animate-breathe border-4 border-berry-100">
+                <h3 className="text-lg font-bold text-ink mb-1">接住你了</h3>
+                <p className="text-xs text-ink/50 mb-4 font-bold">告诉我，发生了什么？（不想说也没关系）</p>
+                
+                <textarea 
+                    className="w-full bg-warm-50 border border-warm-200 rounded-xl p-3 text-sm outline-none focus:border-berry-300 transition-colors mb-4 h-24 resize-none"
+                    placeholder="比如：焦虑、无聊、牙痒痒..."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    autoFocus
+                />
+                
+                <div className="flex gap-2">
+                    <button onClick={() => onConfirm('')} className="flex-1 py-3 text-berry-400 bg-white border border-berry-100 rounded-xl font-bold text-xs">只记数字</button>
+                    <button onClick={() => onConfirm(note)} className="flex-[2] py-3 text-white bg-berry-500 rounded-xl font-bold shadow-md text-sm">记下来</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- 专注计时器 (保留性能优化版) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     const [status, setStatus] = useState('idle');
     const [elapsed, setElapsed] = useState(0);
@@ -331,7 +381,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
         }
     }, []);
 
-    // 唤醒校准 & 状态保存 (性能优化核心)
+    // 唤醒校准 & 状态保存
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
@@ -342,7 +392,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                     setElapsed(saved.elapsed + diff);
                 }
             } else {
-                // 页面不可见时，保存当前状态
                 if (status === 'running' || status === 'paused') {
                     LocalDB.saveTimerState({ status, elapsed, lastTick: Date.now(), tag: selectedTag });
                 }
@@ -352,11 +401,11 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     }, [status, elapsed, selectedTag]);
 
-    // 计时逻辑 (不再每秒写入 localStorage，保护电池)
+    // 计时逻辑
     useEffect(() => {
         if (status === 'running') {
             timerRef.current = setInterval(() => {
-                setElapsed(prev => prev + 1); // 仅更新内存中的数字
+                setElapsed(prev => prev + 1); 
             }, 1000);
         } else {
             clearInterval(timerRef.current);
@@ -364,23 +413,19 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
         return () => clearInterval(timerRef.current);
     }, [status]);
 
-    // 状态变化时手动保存一次 (开始、暂停时)
     useEffect(() => {
         if (status === 'running' || status === 'paused') {
              LocalDB.saveTimerState({ status, elapsed, lastTick: Date.now(), tag: selectedTag });
         }
-    }, [status, selectedTag]); // 注意这里不依赖 elapsed，避免死循环
+    }, [status, selectedTag]);
 
     const handleStart = () => {
-        vibrate();
         setStatus('running');
     };
     const handlePause = () => {
-        vibrate();
         setStatus('paused');
     };
     const handleStop = () => {
-        vibrate();
         if (elapsed > 5) {
             onSaveLog({ id: Date.now(), name: selectedTag, duration: elapsed, timestamp: Date.now() });
         }
@@ -497,31 +542,45 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     );
 };
 
-const HabitCard = ({ config, value, onIncrement }) => {
+const HabitCard = ({ config, value, onIncrement, isNight }) => {
     const isTargetReached = value >= config.max;
     const isClickable = config.type === 'infinite' || !isTargetReached;
     const percentage = Math.min((value / config.max) * 100, 100);
     return (
-        <div onClick={isClickable ? onIncrement : undefined} className={`relative overflow-hidden rounded-3xl p-4 transition-all duration-300 select-none border-2 ${isClickable ? 'cursor-pointer active:scale-[0.98]' : 'cursor-default'} ${isTargetReached ? 'bg-white border-warm-200 opacity-80' : 'bg-white border-white soft-shadow hover:border-warm-200'}`}>
-            <div className="absolute bottom-0 left-0 h-1.5 bg-warm-300 transition-all duration-500 rounded-r-full" style={{ width: `${percentage}%`, opacity: isTargetReached ? 0 : 0.5 }} />
+        <div onClick={isClickable ? onIncrement : undefined} className={`relative overflow-hidden rounded-3xl p-4 transition-all duration-300 select-none border-2 ${isClickable ? 'cursor-pointer active:scale-[0.98]' : 'cursor-default'} ${
+            isTargetReached ? 
+                (isNight ? 'bg-indigo-900/40 border-indigo-800 opacity-60' : 'bg-white border-warm-200 opacity-80') : 
+                (isNight ? 'bg-[#2a2a3e] border-[#3a3a4e] soft-shadow hover:border-indigo-400' : 'bg-white border-white soft-shadow hover:border-warm-200')
+        }`}>
+            <div className={`absolute bottom-0 left-0 h-1.5 transition-all duration-500 rounded-r-full ${isNight ? 'bg-indigo-500' : 'bg-warm-300'}`} style={{ width: `${percentage}%`, opacity: isTargetReached ? 0 : 0.5 }} />
             <div className="flex justify-between items-center relative z-10">
                 <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm ${config.color.split(' ')[0]}`}>{config.label.split(' ')[0]}</div>
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm ${
+                        isNight ? 'bg-indigo-800/50 text-indigo-200' : config.color.split(' ')[0] + ' ' + config.color.split(' ')[1]
+                    }`}>{config.label.split(' ')[0]}</div>
                     <div>
-                        <h3 className={`font-bold text-lg flex items-center gap-2 ${isTargetReached ? 'text-warm-400 line-through' : 'text-ink'}`}>{config.label.split(' ')[1]} {isTargetReached && <span className="text-warm-500 no-underline"><Icons.Check /></span>}</h3>
-                        <p className="text-xs text-ink/40 font-bold mt-0.5">{config.desc}</p>
+                        <h3 className={`font-bold text-lg flex items-center gap-2 ${
+                            isTargetReached ? (isNight ? 'text-indigo-400 line-through' : 'text-warm-400 line-through') : (isNight ? 'text-indigo-100' : 'text-ink')
+                        }`}>{config.label.split(' ')[1]} {isTargetReached && <span className={isNight ? "text-indigo-400" : "text-warm-500"}><Icons.Check /></span>}</h3>
+                        <p className={`text-xs font-bold mt-0.5 ${isNight ? 'text-indigo-300/50' : 'text-ink/40'}`}>{config.desc}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="text-right"><span className={`text-2xl font-bold font-mono ${isTargetReached ? 'text-warm-300' : 'text-warm-600'}`}>{value}</span><span className="text-xs text-warm-300 font-bold">/{config.max}</span></div>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all border-b-2 active:border-b-0 active:translate-y-0.5 ${isTargetReached ? (config.type === 'infinite' ? 'bg-warm-400 text-white border-warm-500' : 'bg-gray-100 text-gray-300 border-gray-200') : 'bg-warm-100 text-warm-600 border-warm-200'}`}><Icons.Plus /></div>
+                    <div className="text-right"><span className={`text-2xl font-bold font-mono ${
+                        isTargetReached ? (isNight ? 'text-indigo-800' : 'text-warm-300') : (isNight ? 'text-indigo-300' : 'text-warm-600')
+                    }`}>{value}</span><span className={`text-xs font-bold ${isNight ? 'text-indigo-800' : 'text-warm-300'}`}>/{config.max}</span></div>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all border-b-2 active:border-b-0 active:translate-y-0.5 ${
+                        isTargetReached ? 
+                            (config.type === 'infinite' ? (isNight ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-warm-400 text-white border-warm-500') : (isNight ? 'bg-gray-800 text-gray-600 border-gray-700' : 'bg-gray-100 text-gray-300 border-gray-200')) : 
+                            (isNight ? 'bg-indigo-900 text-indigo-300 border-indigo-800' : 'bg-warm-100 text-warm-600 border-warm-200')
+                    }`}><Icons.Plus /></div>
                 </div>
             </div>
         </div>
     );
 };
 
-// --- V17.1 更新: 修复专注时长单位显示 ---
+// --- ReportModal 组件 ---
 const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'stats'
     const [selectedDateData, setSelectedDateData] = useState(null);
@@ -582,12 +641,15 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
 
     // --- 通用数据处理 ---
     const handleExportCSV = () => {
-        let csvContent = "\uFEFF日期,饮水,顺畅,脊柱,睡眠,冲动记录,总专注(分),详情\n";
+        let csvContent = "\uFEFF日期,饮水,顺畅,脊柱,睡眠,冲动记录,总专注(分),详情,冲动备注\n";
         Object.keys(allData).sort().reverse().forEach(date => {
             const d = allData[date];
             const focus = (d.timeLogs||[]).reduce((a,c)=>a+c.duration,0)/60;
             const details = (d.timeLogs||[]).map(l=>`${l.name}(${Math.round(l.duration/60)}m)`).join('; ');
-            csvContent += `${date},${d.water||0},${d.poop||0},${d.spine||0},${d.sleep||0},${d.impulse||0},${focus.toFixed(1)},"${details}"\n`;
+            // 导出冲动备注
+            const impulseNotes = (d.impulseRecords||[]).map(r => r.note).filter(n=>n).join('; ');
+            
+            csvContent += `${date},${d.water||0},${d.poop||0},${d.spine||0},${d.sleep||0},${d.impulse||0},${focus.toFixed(1)},"${details}","${impulseNotes}"\n`;
         });
         downloadFile(csvContent, `Deonysus_Report_${getShanghaiDate()}.csv`, 'text/csv;charset=utf-8;');
         setToastMsg("报表已生成");
@@ -624,8 +686,6 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={onClose}></div>
             <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] animate-[float_4s_ease-in-out_infinite] border-4 border-paper">
-                
-                {/* Header with Switcher */}
                 <div className="p-4 border-b-2 border-dashed border-warm-100 flex justify-between items-center bg-paper">
                     <div className="flex bg-warm-50 p-1 rounded-lg">
                         <button onClick={() => setViewMode('calendar')} className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${viewMode==='calendar' ? 'bg-white text-warm-600 shadow-sm' : 'text-warm-300'}`}>月历</button>
@@ -635,7 +695,6 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
                 </div>
 
                 <div className="p-5 overflow-y-auto">
-                    {/* Calendar View */}
                     {viewMode === 'calendar' && (
                         <>
                             <div className="flex justify-between items-center mb-4 px-2">
@@ -656,8 +715,15 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
                                             <div className="flex justify-between"><span>💩 顺畅:</span> <b>{selectedDateData.data.poop}</b></div>
                                             <div className="flex justify-between"><span>🚶‍♀️ 脊柱:</span> <b>{selectedDateData.data.spine}</b></div>
                                             <div className="flex justify-between"><span>🌙 睡眠:</span> <b>{selectedDateData.data.sleep}</b></div>
-                                            {/* 修复：使用 formatSmartDuration 显示时长 */}
                                             <div className="flex justify-between"><span>⏱️ 专注:</span> <b>{formatSmartDuration((selectedDateData.data.timeLogs||[]).reduce((a,c)=>a+c.duration,0))}</b></div>
+                                            {selectedDateData.data.impulseRecords && selectedDateData.data.impulseRecords.length > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-dashed border-warm-200">
+                                                    <span className="block mb-1 opacity-50">🛡️ 冲动备注:</span>
+                                                    {selectedDateData.data.impulseRecords.map(r => (
+                                                        r.note && <div key={r.id} className="bg-warm-50 p-1.5 rounded mb-1 text-[10px] text-ink/70">{r.note}</div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     ) : <p className="text-xs text-warm-400 text-center py-2">这一天是空白的呢。</p>}
                                 </div>
@@ -665,7 +731,6 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
                         </>
                     )}
 
-                    {/* Stats View */}
                     {viewMode === 'stats' && (
                         <>
                             <div className="flex p-2 bg-paper mb-4 rounded-xl border border-warm-100">
@@ -681,7 +746,6 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
                         </>
                     )}
 
-                    {/* Footer Tools */}
                     <div className="pt-4 border-t-2 border-dashed border-warm-100 mt-4">
                         <h3 className="text-xs font-bold text-warm-400 mb-2 ml-1">数据管家</h3>
                         <div className="grid grid-cols-2 gap-2">
