@@ -145,7 +145,7 @@ const Icons = {
     Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 };
 
-// --- 4. 子组件定义 ---
+// --- 4. 子组件定义 (必须在 App 之前定义) ---
 
 const HabitCard = ({ config, value, onIncrement, isNight }) => {
     const isTargetReached = value >= config.max;
@@ -209,45 +209,104 @@ const ImpulseModal = ({ onClose, onConfirm }) => {
     );
 };
 
-// V20.0: 二合一计时器组件（内置了 DonutChart 逻辑）
+const DonutChart = ({ logs, tags }) => {
+    const totalDuration = logs.reduce((acc, log) => acc + log.duration, 0);
+    
+    if (totalDuration === 0) return (
+        <div className="flex flex-col items-center justify-center py-8 text-warm-300">
+            <div className="w-32 h-32 rounded-full border-4 border-warm-100 mb-2 flex items-center justify-center">
+                <span className="text-2xl opacity-20">🕒</span>
+            </div>
+            <span className="text-xs font-bold">今天还没有开始专注哦</span>
+        </div>
+    );
+
+    const tagDurations = {};
+    logs.forEach(log => {
+        tagDurations[log.name] = (tagDurations[log.name] || 0) + log.duration;
+    });
+
+    let cumulativePercent = 0;
+    const slices = Object.entries(tagDurations).map(([tagName, duration]) => {
+        const percent = duration / totalDuration;
+        const startP = cumulativePercent;
+        cumulativePercent += percent;
+        const tagConfig = tags.find(t => t.name === tagName);
+        const color = tagConfig ? tagConfig.color : '#E0E0E0';
+        return { name: tagName, percent, startP, color };
+    }).sort((a,b) => b.percent - a.percent);
+
+    const size = 160;
+    const strokeWidth = 25;
+    const radius = (size - strokeWidth) / 2;
+    const center = size / 2;
+    const circumference = 2 * Math.PI * radius;
+
+    return (
+        <div className="flex items-center gap-6 bg-white p-5 rounded-3xl soft-shadow border border-warm-50 mb-6">
+            <div className="relative w-32 h-32 flex-shrink-0">
+                <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
+                    <circle cx={center} cy={center} r={radius} fill="none" stroke="#FFF0D4" strokeWidth={strokeWidth} />
+                    {slices.map((slice, i) => (
+                        <circle
+                            key={i}
+                            cx={center}
+                            cy={center}
+                            r={radius}
+                            fill="none"
+                            stroke={slice.color}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray={circumference}
+                            strokeDashoffset={circumference * (1 - slice.percent)}
+                            style={{ 
+                                transition: 'all 0.5s ease-out',
+                                transformOrigin: 'center',
+                                transform: `rotate(${slice.startP * 360}deg)`
+                            }}
+                        />
+                    ))}
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none rotate-0">
+                    <span className="text-xs font-bold text-warm-300">总专注</span>
+                    <span className="text-lg font-bold font-mono text-warm-600">{formatSmartDuration(totalDuration).replace('h','小时').replace('m','分钟')}</span>
+                </div>
+            </div>
+            <div className="flex-1 space-y-2 max-h-32 overflow-y-auto">
+                {slices.map((slice, i) => (
+                    <div key={i} className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: slice.color}}></div>
+                            <span className="font-bold text-ink/80">{slice.name}</span>
+                        </div>
+                        <span className="font-mono text-warm-400 font-bold">{Math.round(slice.percent * 100)}%</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag, onDeleteTag }) => {
     const [status, setStatus] = useState('idle');
     const [elapsed, setElapsed] = useState(0);
     const [selectedTag, setSelectedTag] = useState(tags[0] || {name:'默认', color:'#ccc'});
     
-    const [dialogMode, setDialogMode] = useState('select'); 
+    // 弹窗相关状态
+    const [dialogMode, setDialogMode] = useState('select'); // 'select' | 'edit'
     const [customTagInput, setCustomTagInput] = useState('');
     const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]);
-    const [editingOriginalName, setEditingOriginalName] = useState(null);
+    const [editingOriginalName, setEditingOriginalName] = useState(null); // 记录正在编辑的旧名字
 
     const timerRef = useRef(null);
 
-    // 数据处理逻辑
-    const totalDuration = logs.reduce((acc, log) => acc + log.duration, 0);
-    const tagDurations = {};
-    logs.forEach(log => { tagDurations[log.name] = (tagDurations[log.name] || 0) + log.duration; });
-    
-    let slices = [];
-    if (totalDuration > 0) {
-        let cumulativePercent = 0;
-        slices = Object.entries(tagDurations).map(([tagName, duration]) => {
-            const percent = duration / totalDuration;
-            const startP = cumulativePercent;
-            cumulativePercent += percent;
-            const tagConfig = tags.find(t => t.name === tagName);
-            const color = tagConfig ? tagConfig.color : '#E0E0E0';
-            return { name: tagName, percent, startP, color };
-        }).sort((a,b) => b.percent - a.percent);
-    }
-
-    const currentTagColor = selectedTag ? selectedTag.color : '#ccc';
-
+    // 初始化
     useEffect(() => {
         const saved = LocalDB.getTimerState();
         if (saved) {
             const savedTagName = typeof saved.tag === 'string' ? saved.tag : saved.tag.name;
             const foundTag = tags.find(t => t.name === savedTagName) || tags[0];
             setSelectedTag(foundTag);
+            
             if (saved.status === 'running') {
                 const now = Date.now();
                 const diff = Math.floor((now - saved.lastTick) / 1000);
@@ -260,6 +319,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
         }
     }, [tags]);
 
+    // 唤醒与状态保持
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
@@ -307,9 +367,10 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
         LocalDB.saveTimerState(null);
     };
 
+    // 标签管理逻辑
     const openDialog = () => {
         if (status === 'idle') {
-            setDialogMode('select');
+            setDialogMode('select'); // 默认打开是选择模式
             setCustomTagInput('');
             setSelectedColor(COLOR_PALETTE[0]);
             setEditingOriginalName(null);
@@ -319,9 +380,11 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
 
     const handleTagClick = (tag) => {
         if (dialogMode === 'select') {
+            // 选择模式：选中并关闭
             setSelectedTag(tag);
             document.getElementById('tag-dialog').close();
         } else {
+            // 编辑模式：填充表单，准备修改
             setCustomTagInput(tag.name);
             setSelectedColor(tag.color);
             setEditingOriginalName(tag.name);
@@ -330,23 +393,31 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
 
     const handleSaveTag = () => {
         if (!customTagInput.trim()) return;
+        
         const newName = customTagInput.trim();
         const newColor = selectedColor;
+
         if (dialogMode === 'edit' && editingOriginalName) {
+            // 修改现有标签
             onUpdateTag(editingOriginalName, newName, newColor);
+            // 如果改的是当前选中的标签，也要更新状态
             if (selectedTag.name === editingOriginalName) {
                 setSelectedTag({ name: newName, color: newColor });
             }
             setEditingOriginalName(null);
             setCustomTagInput('');
         } else {
+            // 新增标签
             onAddTag({ name: newName, color: newColor });
             setSelectedTag({ name: newName, color: newColor });
             setCustomTagInput('');
         }
+        
+        // 保存后如果不关闭弹窗，用户可以继续操作，或者关闭。这里选择清空输入
         if (dialogMode === 'select') {
             document.getElementById('tag-dialog').close();
         } else {
+             // 编辑模式下保存后，清空输入框，方便下一次操作
              setCustomTagInput('');
              setEditingOriginalName(null);
         }
@@ -363,63 +434,33 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
         }
     };
 
-    const size = 260; 
-    const strokeWidth = 24;
-    const radius = (size - strokeWidth) / 2;
-    const center = size / 2;
-    const circumference = 2 * Math.PI * radius;
+    const currentTagColor = selectedTag ? selectedTag.color : '#ccc';
 
     return (
-        <div className="space-y-6 pt-8">
-            <div className="relative flex flex-col items-center justify-center">
-                {status === 'running' && (
-                    <div 
-                        className="absolute rounded-full animate-breathe opacity-30"
-                        style={{ width: `${size + 20}px`, height: `${size + 20}px`, backgroundColor: currentTagColor, zIndex: 0 }}
-                    ></div>
-                )}
-
-                <div className="relative z-10" style={{ width: size, height: size }}>
-                    <div className="absolute inset-0 rounded-full bg-white soft-shadow" style={{ margin: strokeWidth }}></div>
-                    <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90 relative z-20 pointer-events-none">
-                        {slices.length === 0 && (
-                            <circle cx={center} cy={center} r={radius} fill="none" stroke="#F5F5F0" strokeWidth={strokeWidth} />
-                        )}
-                        {slices.map((slice, i) => (
-                            <circle
-                                key={i}
-                                cx={center}
-                                cy={center}
-                                r={radius}
-                                fill="none"
-                                stroke={slice.color}
-                                strokeWidth={strokeWidth}
-                                strokeDasharray={circumference}
-                                strokeDashoffset={circumference * (1 - slice.percent)}
-                                style={{ transition: 'all 0.5s ease-out', transformOrigin: 'center', transform: `rotate(${slice.startP * 360}deg)` }}
-                            />
-                        ))}
-                    </svg>
-
-                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center">
-                        <div className="mb-3 relative">
-                            <div className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2">
-                                <span className="text-xs font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
-                                <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1 rounded-full cursor-pointer hover:border-warm-400 active:scale-95 transition-transform" onClick={openDialog}>
-                                    <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
-                                    <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
-                                    <Icons.Tag />
-                                </div>
+        <div className="space-y-6 pt-4">
+            <DonutChart logs={logs} tags={tags} />
+            <div className="relative flex flex-col items-center justify-center py-8">
+                <div 
+                    className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
+                    style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }} 
+                >
+                    <div className="mb-4 relative">
+                        <div className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2">
+                            <span className="text-xs font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
+                            <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={openDialog}>
+                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
+                                <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
+                                <Icons.Tag />
                             </div>
                         </div>
-                        <div className="text-5xl font-bold font-mono tracking-widest tabular-nums" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
-                            {formatTimeHHMMSS(elapsed)}
-                        </div>
-                        <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
                     </div>
+                    <div className="text-5xl font-bold font-mono tracking-widest tabular-nums" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
+                        {formatTimeHHMMSS(elapsed)}
+                    </div>
+                    <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
                 </div>
                 
-                <div className="flex items-center gap-6 mt-10 relative z-20">
+                <div className="flex items-center gap-6 mt-8 relative z-20">
                     {status === 'running' ? (
                         <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
                     ) : (
@@ -504,7 +545,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
             <div className="bg-white rounded-3xl p-5 soft-shadow border border-warm-50">
                 <div className="flex justify-between items-end px-2 mb-4 border-b border-dashed border-warm-100 pb-2">
                     <h3 className="font-bold text-ink">今天的足迹</h3>
-                    <span className="text-xs font-bold text-warm-400">共 {formatDuration(logs.reduce((acc, curr) => acc + curr.duration, 0))}</span>
                 </div>
                 <div className="space-y-3">
                     {logs.length === 0 ? <div className="text-center py-8 text-warm-300 font-bold text-sm">还没有留下脚印哦</div> : logs.map(log => {
