@@ -145,7 +145,7 @@ const Icons = {
     Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 };
 
-// --- 4. 子组件定义 ---
+// --- 4. 子组件定义 (必须在 App 之前定义) ---
 
 const HabitCard = ({ config, value, onIncrement, isNight }) => {
     const isTargetReached = value >= config.max;
@@ -291,13 +291,15 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
     const [elapsed, setElapsed] = useState(0);
     const [selectedTag, setSelectedTag] = useState(tags[0] || {name:'默认', color:'#ccc'});
     
-    const [dialogMode, setDialogMode] = useState('select');
+    // 弹窗相关状态
+    const [dialogMode, setDialogMode] = useState('select'); // 'select' | 'edit'
     const [customTagInput, setCustomTagInput] = useState('');
     const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]);
-    const [editingOriginalName, setEditingOriginalName] = useState(null);
+    const [editingOriginalName, setEditingOriginalName] = useState(null); // 记录正在编辑的旧名字
 
     const timerRef = useRef(null);
 
+    // 初始化
     useEffect(() => {
         const saved = LocalDB.getTimerState();
         if (saved) {
@@ -317,6 +319,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
         }
     }, [tags]);
 
+    // 唤醒与状态保持
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
@@ -364,9 +367,10 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
         LocalDB.saveTimerState(null);
     };
 
+    // 标签管理逻辑
     const openDialog = () => {
         if (status === 'idle') {
-            setDialogMode('select');
+            setDialogMode('select'); // 默认打开是选择模式
             setCustomTagInput('');
             setSelectedColor(COLOR_PALETTE[0]);
             setEditingOriginalName(null);
@@ -376,9 +380,11 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
 
     const handleTagClick = (tag) => {
         if (dialogMode === 'select') {
+            // 选择模式：选中并关闭
             setSelectedTag(tag);
             document.getElementById('tag-dialog').close();
         } else {
+            // 编辑模式：填充表单，准备修改
             setCustomTagInput(tag.name);
             setSelectedColor(tag.color);
             setEditingOriginalName(tag.name);
@@ -392,21 +398,26 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
         const newColor = selectedColor;
 
         if (dialogMode === 'edit' && editingOriginalName) {
+            // 修改现有标签
             onUpdateTag(editingOriginalName, newName, newColor);
+            // 如果改的是当前选中的标签，也要更新状态
             if (selectedTag.name === editingOriginalName) {
                 setSelectedTag({ name: newName, color: newColor });
             }
             setEditingOriginalName(null);
             setCustomTagInput('');
         } else {
+            // 新增标签
             onAddTag({ name: newName, color: newColor });
             setSelectedTag({ name: newName, color: newColor });
             setCustomTagInput('');
         }
         
+        // 保存后如果不关闭弹窗，用户可以继续操作，或者关闭。这里选择清空输入
         if (dialogMode === 'select') {
             document.getElementById('tag-dialog').close();
         } else {
+             // 编辑模式下保存后，清空输入框，方便下一次操作
              setCustomTagInput('');
              setEditingOriginalName(null);
         }
@@ -428,30 +439,28 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
     return (
         <div className="space-y-6 pt-4">
             <DonutChart logs={logs} tags={tags} />
-            <div className="relative flex flex-col items-center justify-center py-6">
-                <div className="flex flex-col items-center">
-                    <div className="mb-2 relative">
-                        <div 
-                            className="flex items-center gap-2 bg-paper border border-warm-200 px-4 py-1.5 rounded-full cursor-pointer hover:border-warm-400 soft-shadow transition-transform active:scale-95" 
-                            onClick={openDialog}
-                        >
-                            <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
-                            <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
-                            <Icons.Tag />
+            <div className="relative flex flex-col items-center justify-center py-8">
+                <div 
+                    className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
+                    style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }} 
+                >
+                    <div className="mb-4 relative">
+                        <div className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2">
+                            <span className="text-xs font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
+                            <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={openDialog}>
+                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
+                                <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
+                                <Icons.Tag />
+                            </div>
                         </div>
                     </div>
-                    
-                    <div className="text-5xl font-bold font-mono tracking-widest tabular-nums my-4 transition-colors duration-500" 
-                         style={{
-                             color: status === 'running' ? currentTagColor : '#E67E22'
-                         }}>
+                    <div className="text-5xl font-bold font-mono tracking-widest tabular-nums" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
                         {formatTimeHHMMSS(elapsed)}
                     </div>
-                    
-                    <div className="text-xs font-bold text-warm-300 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
+                    <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
                 </div>
                 
-                <div className="flex items-center gap-6 mt-10 relative z-20">
+                <div className="flex items-center gap-6 mt-8 relative z-20">
                     {status === 'running' ? (
                         <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
                     ) : (
@@ -560,7 +569,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
     );
 };
 
-// 4.5 报表弹窗组件 (补回的组件)
+// 4.5 报表弹窗组件 (上一版遗漏的组件，已补回)
 const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'stats'
     const [selectedDateData, setSelectedDateData] = useState(null);
