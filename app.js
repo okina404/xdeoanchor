@@ -138,7 +138,8 @@ const Icons = {
     Right: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
     Calendar: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
     List: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
-    Moon: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    Moon: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>,
+    Manage: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
 };
 
 // --- 4. 子组件定义 (必须在 App 之前定义) ---
@@ -285,15 +286,24 @@ const DonutChart = ({ logs, tags }) => {
     );
 };
 
-// 4.4 专注计时器组件
-const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
+// 4.4 专注计时器组件 (V19.0 支持标签管理)
+const TimeTracker = ({ logs, onSaveLog, onDeleteLog, onDeleteTag, tags, onAddTag }) => {
     const [status, setStatus] = useState('idle');
     const [elapsed, setElapsed] = useState(0);
     const [selectedTag, setSelectedTag] = useState(tags[0] || {name:'默认', color:'#ccc'});
     const [customTagInput, setCustomTagInput] = useState('');
     const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]);
     const [isAddingTag, setIsAddingTag] = useState(false);
+    const [isManageMode, setIsManageMode] = useState(false); // 新增管理模式
     const timerRef = useRef(null);
+
+    // 同步 Effect: 如果选中的标签被删了，自动切回第一个
+    useEffect(() => {
+        const exists = tags.find(t => t.name === selectedTag.name);
+        if (!exists && tags.length > 0) {
+            setSelectedTag(tags[0]);
+        }
+    }, [tags, selectedTag]);
 
     useEffect(() => {
         const saved = LocalDB.getTimerState();
@@ -414,42 +424,65 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 
             <dialog id="tag-dialog" className="p-0 rounded-2xl backdrop:bg-ink/20 border-0 shadow-xl">
                 <div className="bg-white p-5 w-72">
-                    <h3 className="text-lg font-bold text-ink mb-3">选择标签</h3>
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-lg font-bold text-ink">选择标签</h3>
+                        <button 
+                            onClick={() => setIsManageMode(!isManageMode)} 
+                            className={`p-2 rounded-lg transition-colors ${isManageMode ? 'bg-rose-100 text-rose-500' : 'bg-warm-50 text-warm-400'}`}
+                        >
+                            <Icons.Manage />
+                        </button>
+                    </div>
+                    
                     <div className="flex flex-wrap gap-2 mb-4">
                         {tags.map((t, i) => (
                             <button 
                                 key={i} 
-                                onClick={() => { setSelectedTag(t); document.getElementById('tag-dialog').close(); }}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 flex items-center gap-2 ${selectedTag.name === t.name ? 'bg-warm-100 border-warm-400 text-warm-700' : 'bg-white border-warm-100 text-ink/60'}`}
+                                onClick={() => { 
+                                    if (isManageMode) {
+                                        if(confirm(`要删除“${t.name}”这个标签吗？`)) onDeleteTag(t);
+                                    } else {
+                                        setSelectedTag(t); 
+                                        document.getElementById('tag-dialog').close();
+                                    }
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 flex items-center gap-2 relative transition-all ${
+                                    isManageMode ? 'animate-[float_0.5s_ease-in-out_infinite] border-rose-200 bg-rose-50 text-rose-600' : 
+                                    (selectedTag.name === t.name ? 'bg-warm-100 border-warm-400 text-warm-700' : 'bg-white border-warm-100 text-ink/60')
+                                }`}
                             >
-                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: t.color}}></div>
+                                {isManageMode ? <Icons.Trash /> : <div className="w-2 h-2 rounded-full" style={{backgroundColor: t.color}}></div>}
                                 {t.name}
                             </button>
                         ))}
                     </div>
-                    <div className="border-t border-dashed border-warm-200 pt-3">
-                        <div className="text-xs font-bold text-warm-300 mb-2">新建标签颜色</div>
-                        <div className="flex gap-2 mb-3 overflow-x-auto p-2">
-                            {COLOR_PALETTE.map(c => (
-                                <button 
-                                    key={c} 
-                                    onClick={() => setSelectedColor(c)}
-                                    className={`w-6 h-6 rounded-full flex-shrink-0 transition-transform ${selectedColor === c ? 'scale-125 ring-2 ring-offset-1 ring-warm-300' : ''}`}
-                                    style={{backgroundColor: c}}
-                                />
-                            ))}
+                    
+                    {!isManageMode && (
+                        <div className="border-t border-dashed border-warm-200 pt-3">
+                            <div className="text-xs font-bold text-warm-300 mb-2">新建标签颜色</div>
+                            <div className="flex gap-2 mb-3 overflow-x-auto p-2">
+                                {COLOR_PALETTE.map(c => (
+                                    <button 
+                                        key={c} 
+                                        onClick={() => setSelectedColor(c)}
+                                        className={`w-6 h-6 rounded-full flex-shrink-0 transition-transform ${selectedColor === c ? 'scale-125 ring-2 ring-offset-1 ring-warm-300' : ''}`}
+                                        style={{backgroundColor: c}}
+                                    />
+                                ))}
+                            </div>
+                            <input 
+                                className="w-full bg-paper px-3 py-2 rounded-xl border border-warm-200 text-sm outline-none focus:border-warm-400"
+                                placeholder="输入新标签名 (回车保存)"
+                                value={customTagInput}
+                                onChange={e => setCustomTagInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if(e.key === 'Enter' && customTagInput.trim()) handleAddNewTag();
+                                }}
+                            />
                         </div>
-                        <input 
-                            className="w-full bg-paper px-3 py-2 rounded-xl border border-warm-200 text-sm outline-none focus:border-warm-400"
-                            placeholder="输入新标签名 (回车保存)"
-                            value={customTagInput}
-                            onChange={e => setCustomTagInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if(e.key === 'Enter' && customTagInput.trim()) handleAddNewTag();
-                            }}
-                        />
-                    </div>
-                    <button onClick={() => document.getElementById('tag-dialog').close()} className="mt-4 w-full py-2 bg-warm-50 text-warm-400 rounded-xl font-bold text-sm">关闭</button>
+                    )}
+                    
+                    <button onClick={() => {setIsManageMode(false); document.getElementById('tag-dialog').close()}} className="mt-4 w-full py-2 bg-warm-50 text-warm-400 rounded-xl font-bold text-sm">完成</button>
                 </div>
             </dialog>
 
@@ -751,6 +784,17 @@ const App = () => {
         LocalDB.saveSettings(newSettings);
     };
 
+    const deleteTag = (tagToDelete) => {
+        if (settings.tags.length <= 1) {
+            setToastMsg("留一个作为种子吧🌱");
+            return;
+        }
+        const newTags = settings.tags.filter(t => t.name !== tagToDelete.name);
+        const newSettings = { ...settings, tags: newTags };
+        setSettings(newSettings);
+        LocalDB.saveSettings(newSettings);
+    };
+
     const appBgClass = (isLateNight && todayData.sleep < 1) ? 'bg-[#1a1a2e]' : 'bg-paper';
     const textColorClass = (isLateNight && todayData.sleep < 1) ? 'text-gray-200' : 'text-ink';
     const warmTextClass = (isLateNight && todayData.sleep < 1) ? 'text-indigo-300' : 'text-warm-600';
@@ -829,6 +873,7 @@ const App = () => {
                             onDeleteLog={deleteTimeLog}
                             tags={settings.tags}
                             onAddTag={saveNewTag}
+                            onDeleteTag={deleteTag}
                         />
                     </div>
                 )}
