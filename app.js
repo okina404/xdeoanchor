@@ -1,4 +1,4 @@
-﻿const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef } = React;
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
@@ -114,6 +114,10 @@ const formatSmartDuration = (seconds) => {
     if (m < 60) return `${m.toFixed(1)}m`;
     return `${(m / 60).toFixed(1)}h`;
 };
+// 震动反馈辅助函数
+const vibrate = () => {
+    if (navigator.vibrate) navigator.vibrate(50);
+};
 
 // --- 3. 习惯配置 ---
 const HABIT_CONFIG = {
@@ -170,6 +174,7 @@ const App = () => {
     }, [toastMsg]);
 
     const updateHabit = (key, delta) => {
+        vibrate(); // 增加震动反馈
         const currentVal = todayData[key] || 0;
         let newVal = currentVal + delta;
         if (newVal < 0) newVal = 0;
@@ -300,7 +305,7 @@ const App = () => {
     );
 };
 
-// --- 专注计时器 (纯净版 - 无番茄钟) ---
+// --- 专注计时器 (优化版) ---
 const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     const [status, setStatus] = useState('idle');
     const [elapsed, setElapsed] = useState(0);
@@ -326,7 +331,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
         }
     }, []);
 
-    // 唤醒校准
+    // 唤醒校准 & 状态保存 (性能优化核心)
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
@@ -336,37 +341,46 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                     const diff = Math.floor((now - saved.lastTick) / 1000);
                     setElapsed(saved.elapsed + diff);
                 }
+            } else {
+                // 页面不可见时，保存当前状态
+                if (status === 'running' || status === 'paused') {
+                    LocalDB.saveTimerState({ status, elapsed, lastTick: Date.now(), tag: selectedTag });
+                }
             }
         };
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-    }, []);
+    }, [status, elapsed, selectedTag]);
 
-    // 计时逻辑
+    // 计时逻辑 (不再每秒写入 localStorage，保护电池)
     useEffect(() => {
         if (status === 'running') {
             timerRef.current = setInterval(() => {
-                setElapsed(prev => {
-                    const next = prev + 1;
-                    LocalDB.saveTimerState({ status: 'running', elapsed: next, lastTick: Date.now(), tag: selectedTag });
-                    return next;
-                });
+                setElapsed(prev => prev + 1); // 仅更新内存中的数字
             }, 1000);
         } else {
             clearInterval(timerRef.current);
         }
         return () => clearInterval(timerRef.current);
-    }, [status, selectedTag]);
+    }, [status]);
+
+    // 状态变化时手动保存一次 (开始、暂停时)
+    useEffect(() => {
+        if (status === 'running' || status === 'paused') {
+             LocalDB.saveTimerState({ status, elapsed, lastTick: Date.now(), tag: selectedTag });
+        }
+    }, [status, selectedTag]); // 注意这里不依赖 elapsed，避免死循环
 
     const handleStart = () => {
+        vibrate();
         setStatus('running');
-        LocalDB.saveTimerState({ status: 'running', elapsed, lastTick: Date.now(), tag: selectedTag });
     };
     const handlePause = () => {
+        vibrate();
         setStatus('paused');
-        LocalDB.saveTimerState({ status: 'paused', elapsed, lastTick: Date.now(), tag: selectedTag });
     };
     const handleStop = () => {
+        vibrate();
         if (elapsed > 5) {
             onSaveLog({ id: Date.now(), name: selectedTag, duration: elapsed, timestamp: Date.now() });
         }
@@ -685,4 +699,3 @@ const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
-
