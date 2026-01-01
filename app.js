@@ -142,7 +142,7 @@ const Icons = {
     List: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
     Moon: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>,
     Edit: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
-    Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 };
 
 // --- 4. 子组件定义 ---
@@ -440,26 +440,26 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
         <div className="space-y-6 pt-4">
             <DonutChart logs={logs} tags={tags} />
             
-            {/* 这里的计时圆环改小了 */}
+            {/* 这里的计时器变成了圆角长方形卡片 */}
             <div className="relative flex flex-col items-center justify-center py-6">
                 <div 
-                    className={`relative z-10 w-48 h-48 bg-white rounded-full soft-shadow border-4 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
+                    className={`relative z-10 w-full max-w-[280px] py-8 bg-white rounded-3xl soft-shadow border-4 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
                     style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }} 
                 >
-                    <div className="mb-2 relative">
-                        <div className="flex flex-wrap justify-center gap-1 max-w-[150px] px-2">
-                            <span className="text-[10px] font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
-                            <div className="flex items-center gap-2 bg-paper border border-warm-200 px-2 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={openDialog}>
-                                <div className="w-1.5 h-1.5 rounded-full" style={{backgroundColor: currentTagColor}}></div>
-                                <span className="text-xs font-bold text-ink">{selectedTag.name}</span>
+                    <div className="mb-4 relative w-full px-4">
+                        <div className="flex flex-col items-center justify-center gap-1 w-full">
+                            <span className="text-[10px] font-bold text-ink/40 mb-1">当前专注</span>
+                            <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1.5 rounded-full cursor-pointer hover:border-warm-400" onClick={openDialog}>
+                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
+                                <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
                                 <Icons.Tag />
                             </div>
                         </div>
                     </div>
-                    <div className="text-3xl font-bold font-mono tracking-widest tabular-nums" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
+                    <div className="text-5xl font-bold font-mono tracking-widest tabular-nums mb-2" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
                         {formatTimeHHMMSS(elapsed)}
                     </div>
-                    <div className="text-[10px] font-bold text-warm-300 mt-1 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
+                    <div className="text-xs font-bold text-warm-300 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
                 </div>
                 
                 <div className="flex items-center gap-6 mt-6 relative z-20">
