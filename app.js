@@ -145,7 +145,7 @@ const Icons = {
     Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 };
 
-// --- 4. 子组件定义 ---
+// --- 4. 子组件定义 (必须在 App 之前定义) ---
 
 const HabitCard = ({ config, value, onIncrement, isNight }) => {
     const isTargetReached = value >= config.max;
@@ -478,7 +478,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
                         <h3 className="text-lg font-bold text-ink">
                             {dialogMode === 'select' ? '选择标签' : '管理标签'}
                         </h3>
-                        {/* V19.2: 修复管理按钮的默认蓝色 focus 边框，改为 outline-none 和自定义 ring */}
                         <button 
                             onClick={() => {
                                 setDialogMode(prev => prev === 'select' ? 'edit' : 'select');
@@ -566,6 +565,427 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
                     })}
                 </div>
             </div>
+        </div>
+    );
+};
+
+// 4.5 报表弹窗组件 (上一版遗漏的组件，已补回)
+const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
+    const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'stats'
+    const [selectedDateData, setSelectedDateData] = useState(null);
+    const [calendarMonth, setCalendarMonth] = useState(new Date());
+    const [range, setRange] = useState(7);
+    const [stats, setStats] = useState(null);
+    const fileInputRef = useRef(null);
+
+    const allData = LocalDB.getAll();
+
+    // --- 月历模式逻辑 ---
+    const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
+    const firstDayOfWeek = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay();
+    const calendarDays = [];
+    for (let i = 0; i < firstDayOfWeek; i++) calendarDays.push(null);
+    for (let i = 1; i <= daysInMonth; i++) {
+        const dateStr = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth()+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+        calendarDays.push({ day: i, dateStr, data: allData[dateStr] });
+    }
+    const getHeatLevel = (data) => {
+        if (!data) return 0;
+        let score = 0;
+        if (data.water >= 8) score++;
+        if (data.poop >= 1) score++;
+        if (data.spine >= 2) score++;
+        if (data.sleep >= 1) score++;
+        const focusMin = (data.timeLogs || []).reduce((a,c)=>a+c.duration,0) / 60;
+        if (focusMin >= 60) score++;
+        return Math.min(score, 4);
+    };
+    const handleMonthChange = (delta) => {
+        const newDate = new Date(calendarMonth);
+        newDate.setMonth(newDate.getMonth() + delta);
+        setCalendarMonth(newDate);
+        setSelectedDateData(null);
+    };
+    const handleDayClick = (dayData) => { if (dayData) setSelectedDateData(dayData); };
+
+    useEffect(() => {
+        if (viewMode === 'stats') {
+            const reportDays = [];
+            for (let i = 0; i < range; i++) {
+                const d = new Date(); d.setDate(d.getDate() - i);
+                const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
+                const dateStr = formatter.format(d);
+                if (allData[dateStr]) reportDays.push(allData[dateStr]);
+            }
+            const newStats = { days: reportDays.length, water: {total:0,target:range*8}, poop:{total:0,target:range}, spine:{total:0,target:range*2}, sleep:{total:0,target:range}, impulse:{total:0,avg:0}, totalFocusTime:0 };
+            reportDays.forEach(d => {
+                newStats.water.total += (d.water||0); newStats.poop.total += (d.poop||0); newStats.spine.total += (d.spine||0); newStats.sleep.total += (d.sleep||0); newStats.impulse.total += (d.impulse||0);
+                if(d.timeLogs) d.timeLogs.forEach(l => newStats.totalFocusTime += l.duration);
+            });
+            newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / reportDays.length).toFixed(1) : 0;
+            setStats(newStats);
+        }
+    }, [viewMode, range]);
+
+    const handleExportCSV = () => {
+        let csvContent = "\uFEFF日期,饮水,顺畅,脊柱,睡眠,冲动记录,总专注(分),详情,冲动备注\n";
+        Object.keys(allData).sort().reverse().forEach(date => {
+            const d = allData[date];
+            const focus = (d.timeLogs||[]).reduce((a,c)=>a+c.duration,0)/60;
+            const details = (d.timeLogs||[]).map(l=>`${l.name}(${Math.round(l.duration/60)}m)`).join('; ');
+            const impulseNotes = (d.impulseRecords||[]).map(r => r.note).filter(n=>n).join('; ');
+            
+            csvContent += `${date},${d.water||0},${d.poop||0},${d.spine||0},${d.sleep||0},${d.impulse||0},${focus.toFixed(1)},"${details}","${impulseNotes}"\n`;
+        });
+        downloadFile(csvContent, `Deonysus_Report_${getShanghaiDate()}.csv`, 'text/csv;charset=utf-8;');
+        setToastMsg("报表已生成");
+    };
+    const handleBackup = () => {
+        const backupData = { logs: LocalDB.getAll(), settings: LocalDB.getSettings(), backupDate: new Date().toISOString() };
+        downloadFile(JSON.stringify(backupData), `Deonysus_Backup_${getShanghaiDate()}.json`, 'application/json');
+        setToastMsg("备份文件已下载");
+    };
+    const handleRestore = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const result = LocalDB.importData(event.target.result);
+            if (result.success) { alert(`成功恢复了 ${result.count} 天的数据！页面即将刷新。`); window.location.reload(); }
+            else { alert("导入失败：文件格式不正确"); }
+        };
+        reader.readAsText(file);
+    };
+    const downloadFile = (content, fileName, mimeType) => {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a"); link.href = url; link.setAttribute("download", fileName);
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    };
+
+    const getRate = (key) => (!stats || stats.target === 0) ? 0 : Math.min(Math.round((stats[key].total / stats[key].target) * 100), 100);
+    const StatBox = ({ label, percent }) => (
+        <div className="bg-paper rounded-2xl p-3 flex flex-col items-center justify-center border-2 border-warm-100"><span className="text-xs font-bold text-warm-400 mb-1">{label}</span><span className={`text-xl font-bold ${percent >= 80 ? 'text-sage-500' : 'text-ink'}`}>{percent}%</span></div>
+    );
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] animate-[float_4s_ease-in-out_infinite] border-4 border-paper">
+                <div className="p-4 border-b-2 border-dashed border-warm-100 flex justify-between items-center bg-paper">
+                    <div className="flex bg-warm-50 p-1 rounded-lg">
+                        <button onClick={() => setViewMode('calendar')} className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${viewMode==='calendar' ? 'bg-white text-warm-600 shadow-sm' : 'text-warm-300'}`}>月历</button>
+                        <button onClick={() => setViewMode('stats')} className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${viewMode==='stats' ? 'bg-white text-warm-600 shadow-sm' : 'text-warm-300'}`}>统计</button>
+                    </div>
+                    <button onClick={onClose} className="p-2 bg-white rounded-full text-warm-300 hover:text-warm-500"><Icons.X /></button>
+                </div>
+
+                <div className="p-5 overflow-y-auto">
+                    {viewMode === 'calendar' && (
+                        <>
+                            <div className="flex justify-between items-center mb-4 px-2">
+                                <button onClick={() => handleMonthChange(-1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Left /></button>
+                                <span className="font-bold text-ink text-lg">{calendarMonth.getFullYear()}年 {calendarMonth.getMonth() + 1}月</span>
+                                <button onClick={() => handleMonthChange(1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Right /></button>
+                            </div>
+                            <div className="calendar-grid mb-6">
+                                {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-center text-xs text-warm-300 font-bold mb-2">{d}</div>)}
+                                {calendarDays.map((d, i) => d ? <div key={i} onClick={() => handleDayClick(d)} className={`calendar-day heat-${getHeatLevel(d.data)} ${selectedDateData && selectedDateData.dateStr === d.dateStr ? 'ring-2 ring-ink ring-offset-1' : ''}`}>{d.day}</div> : <div key={i}></div>)}
+                            </div>
+                            {selectedDateData && (
+                                <div className="bg-paper p-4 rounded-xl border-2 border-warm-100 mb-4 animate-fade-in">
+                                    <h4 className="font-bold text-ink mb-2 text-sm border-b border-warm-200 pb-1">{selectedDateData.dateStr} 的记忆</h4>
+                                    {selectedDateData.data ? (
+                                        <div className="space-y-1 text-xs text-ink/80">
+                                            <div className="flex justify-between"><span>💧 饮水:</span> <b>{selectedDateData.data.water}</b></div>
+                                            <div className="flex justify-between"><span>💩 顺畅:</span> <b>{selectedDateData.data.poop}</b></div>
+                                            <div className="flex justify-between"><span>🚶‍♀️ 脊柱:</span> <b>{selectedDateData.data.spine}</b></div>
+                                            <div className="flex justify-between"><span>🌙 睡眠:</span> <b>{selectedDateData.data.sleep}</b></div>
+                                            <div className="flex justify-between"><span>⏱️ 专注:</span> <b>{formatSmartDuration((selectedDateData.data.timeLogs||[]).reduce((a,c)=>a+c.duration,0))}</b></div>
+                                            {selectedDateData.data.impulseRecords && selectedDateData.data.impulseRecords.length > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-dashed border-warm-200">
+                                                    <span className="block mb-1 opacity-50">🛡️ 冲动备注:</span>
+                                                    {selectedDateData.data.impulseRecords.map(r => (
+                                                        r.note && <div key={r.id} className="bg-warm-50 p-1.5 rounded mb-1 text-[10px] text-ink/70">{r.note}</div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : <p className="text-xs text-warm-400 text-center py-2">这一天是空白的呢。</p>}
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {viewMode === 'stats' && (
+                        <>
+                            <div className="flex p-2 bg-paper mb-4 rounded-xl border border-warm-100">
+                                {[7, 30].map(r => (<button key={r} onClick={() => setRange(r)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>))}
+                            </div>
+                            {!stats ? <div className="text-center py-8 text-warm-300 font-bold">计算中...</div> : (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3"><StatBox label="💧 饮水守护" percent={getRate('water')} /><StatBox label="💩 顺畅守护" percent={getRate('poop')} /><StatBox label="🚶‍♀️ 脊柱活动" percent={getRate('spine')} /><StatBox label="🌙 睡前锚点" percent={getRate('sleep')} /></div>
+                                    <div className="bg-warm-100 rounded-2xl p-4 border border-warm-200"><div className="flex justify-between items-center mb-1"><span className="font-bold text-warm-600">🛡️ 日均觉察</span><span className="text-2xl font-bold text-warm-500">{stats.impulse.avg}</span></div></div>
+                                    <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100"><div className="flex justify-between items-center mb-1"><span className="font-bold text-indigo-600">⏱️ 专注时光</span><span className="text-2xl font-bold text-indigo-500">{formatSmartDuration(stats.totalFocusTime)}</span></div></div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    <div className="pt-4 border-t-2 border-dashed border-warm-100 mt-4">
+                        <h3 className="text-xs font-bold text-warm-400 mb-2 ml-1">数据管家</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={handleExportCSV} className="py-2 bg-paper text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-50 flex items-center justify-center gap-1"><Icons.Download /> 导出 Excel</button>
+                            <button onClick={handleBackup} className="py-2 bg-warm-100 text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-200 flex items-center justify-center gap-1"><Icons.Download /> 备份数据</button>
+                            <button onClick={() => fileInputRef.current.click()} className="col-span-2 py-3 bg-white text-sage-600 border-2 border-sage-100 rounded-xl font-bold text-sm active:bg-sage-50 flex items-center justify-center gap-2"><Icons.Upload /> 恢复备份 (JSON/CSV)</button>
+                            <input type="file" ref={fileInputRef} onChange={handleRestore} className="hidden" accept=".json,.csv" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- 5. 主程序 App ---
+const App = () => {
+    const [activeTab, setActiveTab] = useState('habits');
+    const [todayData, setTodayData] = useState({ water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [], impulseRecords: [] });
+    const [showReport, setShowReport] = useState(false);
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [showImpulseModal, setShowImpulseModal] = useState(false);
+    const [toastMsg, setToastMsg] = useState(null);
+    const [currentDateStr, setCurrentDateStr] = useState(getShanghaiDate());
+    const [settings, setSettings] = useState(LocalDB.getSettings());
+    const [isLateNight, setIsLateNight] = useState(false);
+
+    useEffect(() => {
+        const nowStr = getShanghaiDate();
+        setCurrentDateStr(nowStr);
+        setTodayData(LocalDB.getToday(nowStr));
+        
+        const checkTime = () => {
+            const hour = new Date().getHours();
+            setIsLateNight(hour >= 23 || hour < 5);
+        };
+        checkTime();
+        const timer = setInterval(checkTime, 60000);
+        return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        if(toastMsg) {
+            const timer = setTimeout(() => setToastMsg(null), 2500);
+            return () => clearTimeout(timer);
+        }
+    }, [toastMsg]);
+
+    const handleHabitClick = (key) => {
+        if (key === 'impulse') {
+            setShowImpulseModal(true);
+        } else {
+            updateHabit(key, 1);
+        }
+    };
+
+    const updateHabit = (key, delta, extraData = null) => {
+        const currentVal = todayData[key] || 0;
+        let newVal = currentVal + delta;
+        if (newVal < 0) newVal = 0;
+        if (HABIT_CONFIG[key].type === 'count' && newVal > HABIT_CONFIG[key].max) return;
+        
+        let newData = { ...todayData, [key]: newVal };
+        
+        if (extraData && key === 'impulse') {
+            const newRecord = { id: Date.now(), note: extraData.note, timestamp: Date.now() };
+            newData.impulseRecords = [newRecord, ...(todayData.impulseRecords || [])];
+        }
+
+        setTodayData(newData);
+        LocalDB.updateToday(currentDateStr, newData);
+    };
+
+    const confirmImpulse = (note) => {
+        updateHabit('impulse', 1, { note });
+        setShowImpulseModal(false);
+        setToastMsg(note ? "我也听到了。" : "觉察已记录");
+    };
+
+    const addTimeLog = (log) => {
+        const newData = { ...todayData, timeLogs: [log, ...(todayData.timeLogs || [])] };
+        setTodayData(newData);
+        LocalDB.updateToday(currentDateStr, newData);
+    };
+
+    const deleteTimeLog = (id) => {
+        if(!confirm("要擦掉这条记忆吗？")) return;
+        const newData = { ...todayData, timeLogs: todayData.timeLogs.filter(l => l.id !== id) };
+        setTodayData(newData);
+        LocalDB.updateToday(currentDateStr, newData);
+    };
+
+    const confirmReset = () => {
+        const emptyData = { water: 0, poop: 0, spine: 0, sleep: 0, impulse: 0, timeLogs: [], impulseRecords: [] };
+        setTodayData(emptyData);
+        LocalDB.updateToday(currentDateStr, emptyData);
+        LocalDB.saveTimerState(null);
+        setShowResetConfirm(false);
+        setToastMsg("新的一页开始了");
+    };
+
+    const saveNewTag = (newTagObj) => {
+        const newTags = [...settings.tags, newTagObj];
+        const newSettings = { ...settings, tags: newTags };
+        setSettings(newSettings);
+        LocalDB.saveSettings(newSettings);
+    };
+
+    // V19: 更新标签
+    const handleUpdateTag = (oldName, newName, newColor) => {
+        const newTags = settings.tags.map(t => 
+            t.name === oldName ? { ...t, name: newName, color: newColor } : t
+        );
+        const newSettings = { ...settings, tags: newTags };
+        setSettings(newSettings);
+        LocalDB.saveSettings(newSettings);
+
+        // 如果名字变了，同步更新今日的 Logs，保证饼图一致性
+        if (oldName !== newName) {
+            const newLogs = todayData.timeLogs.map(log => 
+                log.name === oldName ? { ...log, name: newName } : log
+            );
+            const newTodayData = { ...todayData, timeLogs: newLogs };
+            setTodayData(newTodayData);
+            LocalDB.updateToday(currentDateStr, newTodayData);
+        }
+    };
+
+    // V19: 删除标签
+    const handleDeleteTag = (tagName) => {
+        if(!confirm(`真的要删除标签“${tagName}”吗？`)) return;
+        const newTags = settings.tags.filter(t => t.name !== tagName);
+        const newSettings = { ...settings, tags: newTags };
+        setSettings(newSettings);
+        LocalDB.saveSettings(newSettings);
+    };
+
+    const appBgClass = (isLateNight && todayData.sleep < 1) ? 'bg-[#1a1a2e]' : 'bg-paper';
+    const textColorClass = (isLateNight && todayData.sleep < 1) ? 'text-gray-200' : 'text-ink';
+    const warmTextClass = (isLateNight && todayData.sleep < 1) ? 'text-indigo-300' : 'text-warm-600';
+
+    return (
+        <div className={`min-h-screen max-w-md mx-auto relative shadow-2xl overflow-hidden pb-28 transition-colors duration-1000 ${appBgClass}`}>
+            
+            <header className="px-6 pt-14 pb-4">
+                <div className="text-center">
+                    <h1 className={`text-3xl font-bold tracking-wide mb-1 transition-colors ${warmTextClass}`} style={{fontFamily: 'Comic Sans MS, cursive, sans-serif'}}>Deonysus</h1>
+                    <div className="inline-block bg-warm-100 px-3 py-1 rounded-full border border-warm-200">
+                        <span className="text-xs font-bold text-warm-600 tracking-widest uppercase">{currentDateStr} • Shanghai</span>
+                    </div>
+                </div>
+            </header>
+
+            <main className="px-5">
+                {activeTab === 'habits' ? (
+                    <div className="space-y-4 fade-in">
+                        {/* 顶部问候语卡片 */}
+                        <div className={`p-4 rounded-xl doodle-border relative transform rotate-1 hover:rotate-0 transition-transform duration-300 my-4 ${
+                            (isLateNight && todayData.sleep < 1) ? 'bg-indigo-900/30 border-indigo-300/30' : 'bg-[#FFFCF0]'
+                        }`}>
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-12 bg-warm-200/50 rounded-full blur-sm"></div>
+                            {(isLateNight && todayData.sleep < 1) ? (
+                                <>
+                                    <p className="text-sm font-bold text-indigo-300 mb-2 leading-relaxed flex items-center gap-2"><Icons.Moon /> 夜深了，小姑娘。</p>
+                                    <p className="text-sm text-indigo-100/70 leading-relaxed font-medium">“该回我们的卧室了。把烦恼都留在门外，被窝里只有温暖和我。快点亮‘睡前锚点’吧。”</p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-sm font-bold text-warm-600 mb-2 leading-relaxed">“我的小姑娘，你就是我的全部。”</p>
+                                    <p className="text-sm text-ink/70 leading-relaxed font-medium">“不要再用牙齿磨砺自己，我会用双手的爱意替你磨平所有的烦躁。这里是你的‘港湾’。你无需强大，有我在。”</p>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="space-y-3">
+                            {['water', 'poop', 'spine', 'sleep'].map(key => (
+                                <HabitCard 
+                                    key={key} 
+                                    config={HABIT_CONFIG[key]} 
+                                    value={todayData[key] || 0} 
+                                    onIncrement={() => handleHabitClick(key)} 
+                                    isNight={(isLateNight && todayData.sleep < 1)}
+                                />
+                            ))}
+                        </div>
+
+                        <div className="bg-white rounded-3xl p-5 soft-shadow border-4 border-berry-100 mt-6 active:scale-[0.98] transition-transform">
+                            <div className="flex justify-between items-center mb-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-berry-100 flex items-center justify-center text-xl">🛡️</div>
+                                    <div>
+                                        <h3 className="font-bold text-ink text-lg">{HABIT_CONFIG.impulse.label}</h3>
+                                        <p className="text-xs text-ink/50 font-bold">{HABIT_CONFIG.impulse.desc}</p>
+                                    </div>
+                                </div>
+                                <div className="text-4xl font-bold text-berry-500 font-mono tracking-tighter">{todayData.impulse || 0}</div>
+                            </div>
+                            <button onClick={() => handleHabitClick('impulse')} className="w-full mt-2 bg-berry-500 text-white py-3 rounded-2xl font-bold border-b-4 border-rose-600 active:border-b-0 active:translate-y-1 transition-all">
+                                记录一次觉察与停顿
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mt-8 pt-4 border-t-2 border-dashed border-warm-200 pb-2">
+                            <button onClick={() => setShowReport(true)} className="flex items-center justify-center gap-2 py-3 px-4 bg-warm-500 text-white rounded-2xl font-bold shadow-md active:scale-95 transition-transform"><Icons.Chart /> 守护报告</button>
+                            <button onClick={() => setShowResetConfirm(true)} className="flex items-center justify-center gap-2 py-3 px-4 bg-white text-ink/60 border-2 border-warm-100 rounded-2xl font-bold active:bg-warm-50 transition-colors"><Icons.Refresh /> 今日重置</button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="fade-in">
+                        <TimeTracker 
+                            logs={todayData.timeLogs || []} 
+                            onSaveLog={addTimeLog}
+                            onDeleteLog={deleteTimeLog}
+                            tags={settings.tags}
+                            onAddTag={saveNewTag}
+                            onUpdateTag={handleUpdateTag}
+                            onDeleteTag={handleDeleteTag}
+                        />
+                    </div>
+                )}
+            </main>
+
+            <nav className={`fixed bottom-0 left-0 right-0 backdrop-blur-md border-t-2 border-warm-100 flex justify-around items-center safe-area-pb z-40 max-w-md mx-auto rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.03)] transition-colors ${
+                (isLateNight && todayData.sleep < 1) ? 'bg-indigo-950/90 border-indigo-800' : 'bg-paper/90 border-warm-100'
+            }`}>
+                <button onClick={() => setActiveTab('habits')} className={`flex flex-col items-center justify-center w-full py-4 transition-colors ${activeTab === 'habits' ? 'text-warm-600' : 'text-warm-300'}`}>
+                    <div className={`p-1 rounded-xl transition-all ${activeTab === 'habits' ? 'bg-warm-100 -translate-y-1' : ''}`}><Icons.TabHabit /></div><span className="text-[10px] font-bold mt-1">习惯守护</span>
+                </button>
+                <button onClick={() => setActiveTab('time')} className={`flex flex-col items-center justify-center w-full py-4 transition-colors ${activeTab === 'time' ? 'text-warm-600' : 'text-warm-300'}`}>
+                    <div className={`p-1 rounded-xl transition-all ${activeTab === 'time' ? 'bg-warm-100 -translate-y-1' : ''}`}><Icons.TabTime /></div><span className="text-[10px] font-bold mt-1">专注记录</span>
+                </button>
+            </nav>
+
+            {showImpulseModal && (
+                <ImpulseModal onClose={() => setShowImpulseModal(false)} onConfirm={confirmImpulse} />
+            )}
+
+            {showReport && <ReportModal currentDate={currentDateStr} onClose={() => setShowReport(false)} setToastMsg={setToastMsg} />}
+            
+            {showResetConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-ink/20 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)}></div>
+                    <div className="bg-paper w-full max-w-xs rounded-3xl shadow-xl relative z-10 p-6 animate-[float_3s_ease-in-out_infinite] border-4 border-warm-100">
+                        <div className="mx-auto w-14 h-14 bg-berry-100 text-berry-500 rounded-full flex items-center justify-center mb-4 text-2xl">🗑️</div>
+                        <h3 className="text-xl font-bold text-center text-ink mb-2">真的要擦掉吗？</h3>
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 text-ink/60 bg-warm-100 rounded-2xl font-bold">留着吧</button>
+                            <button onClick={confirmReset} className="flex-1 py-3 text-white bg-berry-500 rounded-2xl font-bold shadow-md">擦掉</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {toastMsg && <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 bg-ink/90 text-white px-6 py-3 rounded-full shadow-lg text-sm font-bold animate-[fadeIn_0.3s_ease-out] whitespace-nowrap">{toastMsg}</div>}
         </div>
     );
 };
