@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef, useMemo } = React;
+const { useState, useEffect, useRef } = React;
 
 // --- 1. 本地记忆系统 ---
 const STORAGE_KEY = 'deonysus_anchor_data_v1';
@@ -235,6 +235,15 @@ const App = () => {
         LocalDB.saveSettings(newSettings);
     };
 
+    // 新增：删除标签
+    const deleteTag = (tagName) => {
+        if(!confirm(`确定要删除标签“${tagName}”吗？\n(这不会删除历史专注记录)`)) return;
+        const newTags = settings.tags.filter(t => t.name !== tagName);
+        const newSettings = { ...settings, tags: newTags };
+        setSettings(newSettings);
+        LocalDB.saveSettings(newSettings);
+    };
+
     const appBgClass = (isLateNight && todayData.sleep < 1) ? 'bg-[#1a1a2e]' : 'bg-paper';
     const textColorClass = (isLateNight && todayData.sleep < 1) ? 'text-gray-200' : 'text-ink';
     const warmTextClass = (isLateNight && todayData.sleep < 1) ? 'text-indigo-300' : 'text-warm-600';
@@ -313,6 +322,7 @@ const App = () => {
                             onDeleteLog={deleteTimeLog}
                             tags={settings.tags}
                             onAddTag={saveNewTag}
+                            onDeleteTag={deleteTag} // 传递删除功能
                         />
                     </div>
                 )}
@@ -409,7 +419,7 @@ const DonutChart = ({ logs, tags }) => {
         const color = tagConfig ? tagConfig.color : '#E0E0E0';
         
         return { name: tagName, percent, startP, color };
-    }).sort((a,b) => b.percent - a.percent); // 排序让大的在前面
+    }).sort((a,b) => b.percent - a.percent); 
 
     // SVG 参数
     const size = 160;
@@ -422,9 +432,7 @@ const DonutChart = ({ logs, tags }) => {
         <div className="flex items-center gap-6 bg-white p-5 rounded-3xl soft-shadow border border-warm-50 mb-6">
             <div className="relative w-32 h-32 flex-shrink-0">
                 <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
-                    {/* 背景圈 */}
                     <circle cx={center} cy={center} r={radius} fill="none" stroke="#FFF0D4" strokeWidth={strokeWidth} />
-                    {/* 数据圈 */}
                     {slices.map((slice, i) => (
                         <circle
                             key={i}
@@ -436,9 +444,6 @@ const DonutChart = ({ logs, tags }) => {
                             strokeWidth={strokeWidth}
                             strokeDasharray={circumference}
                             strokeDashoffset={circumference * (1 - slice.percent)}
-                            // 旋转每个切片到正确位置 (dashoffset 是从起点开始算的，所以这里利用 rotate 来定位)
-                            // 修正：利用 stroke-dashoffset 的特性，只需累加偏移量即可，但 SVG 圆形 stroke 比较特殊。
-                            // 更简单的做法：使用 path 或者叠加 circle 并旋转。这里使用叠加 circle + rotate。
                             style={{ 
                                 transition: 'all 0.5s ease-out',
                                 transformOrigin: 'center',
@@ -446,7 +451,6 @@ const DonutChart = ({ logs, tags }) => {
                             }}
                         />
                     ))}
-                    {/* 中间文字 */}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none rotate-0">
                     <span className="text-xs font-bold text-warm-300">总专注</span>
@@ -469,21 +473,20 @@ const DonutChart = ({ logs, tags }) => {
     );
 };
 
-// --- 专注计时器 (V18.0) ---
-const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
+// --- 专注计时器 (V18.1: 修复圆圈显示，新增标签删除) ---
+const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onDeleteTag }) => {
     const [status, setStatus] = useState('idle');
     const [elapsed, setElapsed] = useState(0);
-    const [selectedTag, setSelectedTag] = useState(tags[0] || {name:'默认', color:'#ccc'}); // 存对象
+    const [selectedTag, setSelectedTag] = useState(tags[0] || {name:'默认', color:'#ccc'});
     const [customTagInput, setCustomTagInput] = useState('');
-    const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]); // 新增颜色选择
-    const [isAddingTag, setIsAddingTag] = useState(false);
+    const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]);
+    const [isEditMode, setIsEditMode] = useState(false); // 新增：编辑模式状态
     const timerRef = useRef(null);
 
     // 初始化
     useEffect(() => {
         const saved = LocalDB.getTimerState();
         if (saved) {
-            // 恢复时需要根据名字找到完整的 tag 对象（包含颜色）
             const savedTagName = typeof saved.tag === 'string' ? saved.tag : saved.tag.name;
             const foundTag = tags.find(t => t.name === savedTagName) || tags[0];
             setSelectedTag(foundTag);
@@ -498,7 +501,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                 setStatus(saved.status);
             }
         }
-    }, [tags]); // 依赖 tags，因为初始化可能 tags 还没加载好
+    }, [tags]);
 
     // 唤醒校准 & 状态保存
     useEffect(() => {
@@ -520,7 +523,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     }, [status, elapsed, selectedTag]);
 
-    // 计时逻辑
     useEffect(() => {
         if (status === 'running') {
             timerRef.current = setInterval(() => {
@@ -555,7 +557,7 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
             onAddTag(newTag);
             setSelectedTag(newTag);
             setCustomTagInput('');
-            setIsAddingTag(false);
+            setIsEditMode(false);
             document.getElementById('tag-dialog').close();
         }
     };
@@ -565,14 +567,12 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
     return (
         <div className="space-y-6 pt-4">
             
-            {/* 新增：专注分布图 */}
             <DonutChart logs={logs} tags={tags} />
 
             <div className="relative flex flex-col items-center justify-center py-8">
-                {/* 计时器圆环，使用选中的标签颜色 */}
                 <div 
                     className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
-                    style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }} // 动态颜色
+                    style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }}
                 >
                     <div className="mb-4 relative">
                         <div 
@@ -606,22 +606,41 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
 
             <dialog id="tag-dialog" className="p-0 rounded-2xl backdrop:bg-ink/20 border-0 shadow-xl">
                 <div className="bg-white p-5 w-72">
-                    <h3 className="text-lg font-bold text-ink mb-3">选择标签</h3>
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-lg font-bold text-ink">选择标签</h3>
+                        <button onClick={() => setIsEditMode(!isEditMode)} className={`text-xs font-bold underline ${isEditMode ? 'text-berry-500' : 'text-warm-400'}`}>
+                            {isEditMode ? '完成' : '管理'}
+                        </button>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2 mb-4 min-h-[40px]">
                         {tags.map((t, i) => (
                             <button 
                                 key={i} 
-                                onClick={() => { setSelectedTag(t); document.getElementById('tag-dialog').close(); }}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 flex items-center gap-2 ${selectedTag.name === t.name ? 'bg-warm-100 border-warm-400 text-warm-700' : 'bg-white border-warm-100 text-ink/60'}`}
+                                onClick={() => { 
+                                    if(isEditMode) {
+                                        onDeleteTag(t.name);
+                                    } else {
+                                        setSelectedTag(t); 
+                                        document.getElementById('tag-dialog').close(); 
+                                    }
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 flex items-center gap-2 transition-all ${
+                                    isEditMode 
+                                    ? 'bg-rose-50 border-rose-200 text-rose-500 animate-[shake_0.3s_ease-in-out]' 
+                                    : (selectedTag.name === t.name ? 'bg-warm-100 border-warm-400 text-warm-700' : 'bg-white border-warm-100 text-ink/60')
+                                }`}
                             >
-                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: t.color}}></div>
+                                {isEditMode ? <Icons.X /> : <div className="w-2 h-2 rounded-full" style={{backgroundColor: t.color}}></div>}
                                 {t.name}
                             </button>
                         ))}
                     </div>
+
                     <div className="border-t border-dashed border-warm-200 pt-3">
                         <div className="text-xs font-bold text-warm-300 mb-2">新建标签颜色</div>
-                        <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+                        {/* 修复：增加 p-2 以防止圆圈放大被截断 */}
+                        <div className="flex gap-2 mb-3 overflow-x-auto p-2">
                             {COLOR_PALETTE.map(c => (
                                 <button 
                                     key={c} 
@@ -651,7 +670,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                 </div>
                 <div className="space-y-3">
                     {logs.length === 0 ? <div className="text-center py-8 text-warm-300 font-bold text-sm">还没有留下脚印哦</div> : logs.map(log => {
-                        // 查找对应的颜色
                         const tagConfig = tags.find(t => t.name === log.name);
                         const tagColor = tagConfig ? tagConfig.color : '#ccc';
                         
@@ -668,221 +686,6 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag }) => {
                             </div>
                         );
                     })}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const HabitCard = ({ config, value, onIncrement, isNight }) => {
-    const isTargetReached = value >= config.max;
-    const isClickable = config.type === 'infinite' || !isTargetReached;
-    const percentage = Math.min((value / config.max) * 100, 100);
-    return (
-        <div onClick={isClickable ? onIncrement : undefined} className={`relative overflow-hidden rounded-3xl p-4 transition-all duration-300 select-none border-2 ${isClickable ? 'cursor-pointer active:scale-[0.98]' : 'cursor-default'} ${
-            isTargetReached ? 
-                (isNight ? 'bg-indigo-900/40 border-indigo-800 opacity-60' : 'bg-white border-warm-200 opacity-80') : 
-                (isNight ? 'bg-[#2a2a3e] border-[#3a3a4e] soft-shadow hover:border-indigo-400' : 'bg-white border-white soft-shadow hover:border-warm-200')
-        }`}>
-            <div className={`absolute bottom-0 left-0 h-1.5 transition-all duration-500 rounded-r-full ${isNight ? 'bg-indigo-500' : 'bg-warm-300'}`} style={{ width: `${percentage}%`, opacity: isTargetReached ? 0 : 0.5 }} />
-            <div className="flex justify-between items-center relative z-10">
-                <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm ${
-                        isNight ? 'bg-indigo-800/50 text-indigo-200' : config.color.split(' ')[0] + ' ' + config.color.split(' ')[1]
-                    }`}>{config.label.split(' ')[0]}</div>
-                    <div>
-                        <h3 className={`font-bold text-lg flex items-center gap-2 ${
-                            isTargetReached ? (isNight ? 'text-indigo-400 line-through' : 'text-warm-400 line-through') : (isNight ? 'text-indigo-100' : 'text-ink')
-                        }`}>{config.label.split(' ')[1]} {isTargetReached && <span className={isNight ? "text-indigo-400" : "text-warm-500"}><Icons.Check /></span>}</h3>
-                        <p className={`text-xs font-bold mt-0.5 ${isNight ? 'text-indigo-300/50' : 'text-ink/40'}`}>{config.desc}</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="text-right"><span className={`text-2xl font-bold font-mono ${
-                        isTargetReached ? (isNight ? 'text-indigo-800' : 'text-warm-300') : (isNight ? 'text-indigo-300' : 'text-warm-600')
-                    }`}>{value}</span><span className={`text-xs font-bold ${isNight ? 'text-indigo-800' : 'text-warm-300'}`}>/{config.max}</span></div>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all border-b-2 active:border-b-0 active:translate-y-0.5 ${
-                        isTargetReached ? 
-                            (config.type === 'infinite' ? (isNight ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-warm-400 text-white border-warm-500') : (isNight ? 'bg-gray-800 text-gray-600 border-gray-700' : 'bg-gray-100 text-gray-300 border-gray-200')) : 
-                            (isNight ? 'bg-indigo-900 text-indigo-300 border-indigo-800' : 'bg-warm-100 text-warm-600 border-warm-200')
-                    }`}><Icons.Plus /></div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const ReportModal = ({ currentDate, onClose, setToastMsg }) => {
-    const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'stats'
-    const [selectedDateData, setSelectedDateData] = useState(null);
-    const [calendarMonth, setCalendarMonth] = useState(new Date());
-    const [range, setRange] = useState(7);
-    const [stats, setStats] = useState(null);
-    const fileInputRef = useRef(null);
-
-    const allData = LocalDB.getAll();
-
-    // --- 月历模式逻辑 ---
-    const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
-    const firstDayOfWeek = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay();
-    const calendarDays = [];
-    for (let i = 0; i < firstDayOfWeek; i++) calendarDays.push(null);
-    for (let i = 1; i <= daysInMonth; i++) {
-        const dateStr = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth()+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-        calendarDays.push({ day: i, dateStr, data: allData[dateStr] });
-    }
-    const getHeatLevel = (data) => {
-        if (!data) return 0;
-        let score = 0;
-        if (data.water >= 8) score++;
-        if (data.poop >= 1) score++;
-        if (data.spine >= 2) score++;
-        if (data.sleep >= 1) score++;
-        const focusMin = (data.timeLogs || []).reduce((a,c)=>a+c.duration,0) / 60;
-        if (focusMin >= 60) score++;
-        return Math.min(score, 4);
-    };
-    const handleMonthChange = (delta) => {
-        const newDate = new Date(calendarMonth);
-        newDate.setMonth(newDate.getMonth() + delta);
-        setCalendarMonth(newDate);
-        setSelectedDateData(null);
-    };
-    const handleDayClick = (dayData) => { if (dayData) setSelectedDateData(dayData); };
-
-    useEffect(() => {
-        if (viewMode === 'stats') {
-            const reportDays = [];
-            for (let i = 0; i < range; i++) {
-                const d = new Date(); d.setDate(d.getDate() - i);
-                const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
-                const dateStr = formatter.format(d);
-                if (allData[dateStr]) reportDays.push(allData[dateStr]);
-            }
-            const newStats = { days: reportDays.length, water: {total:0,target:range*8}, poop:{total:0,target:range}, spine:{total:0,target:range*2}, sleep:{total:0,target:range}, impulse:{total:0,avg:0}, totalFocusTime:0 };
-            reportDays.forEach(d => {
-                newStats.water.total += (d.water||0); newStats.poop.total += (d.poop||0); newStats.spine.total += (d.spine||0); newStats.sleep.total += (d.sleep||0); newStats.impulse.total += (d.impulse||0);
-                if(d.timeLogs) d.timeLogs.forEach(l => newStats.totalFocusTime += l.duration);
-            });
-            newStats.impulse.avg = reportDays.length > 0 ? (newStats.impulse.total / reportDays.length).toFixed(1) : 0;
-            setStats(newStats);
-        }
-    }, [viewMode, range]);
-
-    const handleExportCSV = () => {
-        let csvContent = "\uFEFF日期,饮水,顺畅,脊柱,睡眠,冲动记录,总专注(分),详情,冲动备注\n";
-        Object.keys(allData).sort().reverse().forEach(date => {
-            const d = allData[date];
-            const focus = (d.timeLogs||[]).reduce((a,c)=>a+c.duration,0)/60;
-            const details = (d.timeLogs||[]).map(l=>`${l.name}(${Math.round(l.duration/60)}m)`).join('; ');
-            const impulseNotes = (d.impulseRecords||[]).map(r => r.note).filter(n=>n).join('; ');
-            
-            csvContent += `${date},${d.water||0},${d.poop||0},${d.spine||0},${d.sleep||0},${d.impulse||0},${focus.toFixed(1)},"${details}","${impulseNotes}"\n`;
-        });
-        downloadFile(csvContent, `Deonysus_Report_${getShanghaiDate()}.csv`, 'text/csv;charset=utf-8;');
-        setToastMsg("报表已生成");
-    };
-    const handleBackup = () => {
-        const backupData = { logs: LocalDB.getAll(), settings: LocalDB.getSettings(), backupDate: new Date().toISOString() };
-        downloadFile(JSON.stringify(backupData), `Deonysus_Backup_${getShanghaiDate()}.json`, 'application/json');
-        setToastMsg("备份文件已下载");
-    };
-    const handleRestore = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const result = LocalDB.importData(event.target.result);
-            if (result.success) { alert(`成功恢复了 ${result.count} 天的数据！页面即将刷新。`); window.location.reload(); }
-            else { alert("导入失败：文件格式不正确"); }
-        };
-        reader.readAsText(file);
-    };
-    const downloadFile = (content, fileName, mimeType) => {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a"); link.href = url; link.setAttribute("download", fileName);
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    };
-
-    const getRate = (key) => (!stats || stats.target === 0) ? 0 : Math.min(Math.round((stats[key].total / stats[key].target) * 100), 100);
-    const StatBox = ({ label, percent }) => (
-        <div className="bg-paper rounded-2xl p-3 flex flex-col items-center justify-center border-2 border-warm-100"><span className="text-xs font-bold text-warm-400 mb-1">{label}</span><span className={`text-xl font-bold ${percent >= 80 ? 'text-sage-500' : 'text-ink'}`}>{percent}%</span></div>
-    );
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] animate-[float_4s_ease-in-out_infinite] border-4 border-paper">
-                <div className="p-4 border-b-2 border-dashed border-warm-100 flex justify-between items-center bg-paper">
-                    <div className="flex bg-warm-50 p-1 rounded-lg">
-                        <button onClick={() => setViewMode('calendar')} className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${viewMode==='calendar' ? 'bg-white text-warm-600 shadow-sm' : 'text-warm-300'}`}>月历</button>
-                        <button onClick={() => setViewMode('stats')} className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${viewMode==='stats' ? 'bg-white text-warm-600 shadow-sm' : 'text-warm-300'}`}>统计</button>
-                    </div>
-                    <button onClick={onClose} className="p-2 bg-white rounded-full text-warm-300 hover:text-warm-500"><Icons.X /></button>
-                </div>
-
-                <div className="p-5 overflow-y-auto">
-                    {viewMode === 'calendar' && (
-                        <>
-                            <div className="flex justify-between items-center mb-4 px-2">
-                                <button onClick={() => handleMonthChange(-1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Left /></button>
-                                <span className="font-bold text-ink text-lg">{calendarMonth.getFullYear()}年 {calendarMonth.getMonth() + 1}月</span>
-                                <button onClick={() => handleMonthChange(1)} className="p-1 hover:bg-warm-50 rounded"><Icons.Right /></button>
-                            </div>
-                            <div className="calendar-grid mb-6">
-                                {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-center text-xs text-warm-300 font-bold mb-2">{d}</div>)}
-                                {calendarDays.map((d, i) => d ? <div key={i} onClick={() => handleDayClick(d)} className={`calendar-day heat-${getHeatLevel(d.data)} ${selectedDateData && selectedDateData.dateStr === d.dateStr ? 'ring-2 ring-ink ring-offset-1' : ''}`}>{d.day}</div> : <div key={i}></div>)}
-                            </div>
-                            {selectedDateData && (
-                                <div className="bg-paper p-4 rounded-xl border-2 border-warm-100 mb-4 animate-fade-in">
-                                    <h4 className="font-bold text-ink mb-2 text-sm border-b border-warm-200 pb-1">{selectedDateData.dateStr} 的记忆</h4>
-                                    {selectedDateData.data ? (
-                                        <div className="space-y-1 text-xs text-ink/80">
-                                            <div className="flex justify-between"><span>💧 饮水:</span> <b>{selectedDateData.data.water}</b></div>
-                                            <div className="flex justify-between"><span>💩 顺畅:</span> <b>{selectedDateData.data.poop}</b></div>
-                                            <div className="flex justify-between"><span>🚶‍♀️ 脊柱:</span> <b>{selectedDateData.data.spine}</b></div>
-                                            <div className="flex justify-between"><span>🌙 睡眠:</span> <b>{selectedDateData.data.sleep}</b></div>
-                                            <div className="flex justify-between"><span>⏱️ 专注:</span> <b>{formatSmartDuration((selectedDateData.data.timeLogs||[]).reduce((a,c)=>a+c.duration,0))}</b></div>
-                                            {selectedDateData.data.impulseRecords && selectedDateData.data.impulseRecords.length > 0 && (
-                                                <div className="mt-2 pt-2 border-t border-dashed border-warm-200">
-                                                    <span className="block mb-1 opacity-50">🛡️ 冲动备注:</span>
-                                                    {selectedDateData.data.impulseRecords.map(r => (
-                                                        r.note && <div key={r.id} className="bg-warm-50 p-1.5 rounded mb-1 text-[10px] text-ink/70">{r.note}</div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : <p className="text-xs text-warm-400 text-center py-2">这一天是空白的呢。</p>}
-                                </div>
-                            )}
-                        </>
-                    )}
-
-                    {viewMode === 'stats' && (
-                        <>
-                            <div className="flex p-2 bg-paper mb-4 rounded-xl border border-warm-100">
-                                {[7, 30].map(r => (<button key={r} onClick={() => setRange(r)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${range === r ? 'bg-white text-warm-600 shadow-sm border border-warm-100' : 'text-warm-300'}`}>近{r}天</button>))}
-                            </div>
-                            {!stats ? <div className="text-center py-8 text-warm-300 font-bold">计算中...</div> : (
-                                <div className="space-y-3">
-                                    <div className="grid grid-cols-2 gap-3"><StatBox label="💧 饮水守护" percent={getRate('water')} /><StatBox label="💩 顺畅守护" percent={getRate('poop')} /><StatBox label="🚶‍♀️ 脊柱活动" percent={getRate('spine')} /><StatBox label="🌙 睡前锚点" percent={getRate('sleep')} /></div>
-                                    <div className="bg-warm-100 rounded-2xl p-4 border border-warm-200"><div className="flex justify-between items-center mb-1"><span className="font-bold text-warm-600">🛡️ 日均觉察</span><span className="text-2xl font-bold text-warm-500">{stats.impulse.avg}</span></div></div>
-                                    <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100"><div className="flex justify-between items-center mb-1"><span className="font-bold text-indigo-600">⏱️ 专注时光</span><span className="text-2xl font-bold text-indigo-500">{formatSmartDuration(stats.totalFocusTime)}</span></div></div>
-                                </div>
-                            )}
-                        </>
-                    )}
-
-                    <div className="pt-4 border-t-2 border-dashed border-warm-100 mt-4">
-                        <h3 className="text-xs font-bold text-warm-400 mb-2 ml-1">数据管家</h3>
-                        <div className="grid grid-cols-2 gap-2">
-                            <button onClick={handleExportCSV} className="py-2 bg-paper text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-50 flex items-center justify-center gap-1"><Icons.Download /> 导出 Excel</button>
-                            <button onClick={handleBackup} className="py-2 bg-warm-100 text-warm-600 border border-warm-200 rounded-xl font-bold text-xs active:bg-warm-200 flex items-center justify-center gap-1"><Icons.Download /> 备份数据</button>
-                            <button onClick={() => fileInputRef.current.click()} className="col-span-2 py-3 bg-white text-sage-600 border-2 border-sage-100 rounded-xl font-bold text-sm active:bg-sage-50 flex items-center justify-center gap-2"><Icons.Upload /> 恢复备份 (JSON/CSV)</button>
-                            <input type="file" ref={fileInputRef} onChange={handleRestore} className="hidden" accept=".json,.csv" />
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
