@@ -440,10 +440,10 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
         <div className="space-y-6 pt-4">
             <DonutChart logs={logs} tags={tags} />
             
-            {/* 这里的计时器变成了圆角长方形卡片 */}
+            {/* 这里的计时器变成了全宽卡片，和其他卡片保持一致 */}
             <div className="relative flex flex-col items-center justify-center py-6">
                 <div 
-                    className={`relative z-10 w-full max-w-[280px] py-8 bg-white rounded-3xl soft-shadow border-4 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
+                    className={`relative z-10 w-full p-5 bg-white rounded-3xl soft-shadow border flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
                     style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }} 
                 >
                     <div className="mb-4 relative w-full px-4">
