@@ -439,28 +439,28 @@ const TimeTracker = ({ logs, onSaveLog, onDeleteLog, tags, onAddTag, onUpdateTag
     return (
         <div className="space-y-6 pt-4">
             <DonutChart logs={logs} tags={tags} />
-            <div className="relative flex flex-col items-center justify-center py-8">
+            <div className="relative flex flex-col items-center justify-center py-6">
                 <div 
-                    className={`relative z-10 w-64 h-64 bg-white rounded-full soft-shadow border-8 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
+                    className={`relative z-10 w-48 h-48 bg-white rounded-full soft-shadow border-4 flex flex-col items-center justify-center transition-all duration-500 ${status === 'running' ? 'animate-breathe' : ''}`}
                     style={{ borderColor: status === 'running' ? currentTagColor : '#FFF0D4' }} 
                 >
-                    <div className="mb-4 relative">
-                        <div className="flex flex-wrap justify-center gap-1 max-w-[180px] px-2">
-                            <span className="text-xs font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
-                            <div className="flex items-center gap-2 bg-paper border border-warm-200 px-3 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={openDialog}>
-                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: currentTagColor}}></div>
-                                <span className="text-sm font-bold text-ink">{selectedTag.name}</span>
+                    <div className="mb-2 relative">
+                        <div className="flex flex-wrap justify-center gap-1 max-w-[150px] px-2">
+                            <span className="text-[10px] font-bold text-ink/40 mb-1 block w-full text-center">当前专注</span>
+                            <div className="flex items-center gap-2 bg-paper border border-warm-200 px-2 py-1 rounded-full cursor-pointer hover:border-warm-400" onClick={openDialog}>
+                                <div className="w-1.5 h-1.5 rounded-full" style={{backgroundColor: currentTagColor}}></div>
+                                <span className="text-xs font-bold text-ink">{selectedTag.name}</span>
                                 <Icons.Tag />
                             </div>
                         </div>
                     </div>
-                    <div className="text-5xl font-bold font-mono tracking-widest tabular-nums" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
+                    <div className="text-3xl font-bold font-mono tracking-widest tabular-nums" style={{color: status === 'running' ? currentTagColor : '#E67E22'}}>
                         {formatTimeHHMMSS(elapsed)}
                     </div>
-                    <div className="text-xs font-bold text-warm-300 mt-2 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
+                    <div className="text-[10px] font-bold text-warm-300 mt-1 uppercase tracking-widest">{status === 'running' ? 'Focusing...' : 'Ready'}</div>
                 </div>
                 
-                <div className="flex items-center gap-6 mt-8 relative z-20">
+                <div className="flex items-center gap-6 mt-6 relative z-20">
                     {status === 'running' ? (
                         <button onClick={handlePause} className="w-18 h-18 p-4 rounded-2xl bg-amber-100 text-amber-500 border-b-4 border-amber-300 active:border-b-0 active:translate-y-1 transition-all"><Icons.Pause /></button>
                     ) : (
