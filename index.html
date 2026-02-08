@@ -64,26 +64,43 @@
 
     <div id="root"></div>
 
-    <!-- 错误捕捉 (保留一个简单的，万一呢) -->
+    <!-- 错误捕捉 -->
     <script>
         window.onerror = function(message) {
-            // 忽略常见的脚本加载错误（通常是网络波动，刷新就好）
             if (message === 'Script error.') return;
             
             const root = document.getElementById('root');
-            root.innerHTML = `
-                <div style="padding:20px;color:#E53935;text-align:center;font-family:sans-serif;">
-                    <h3 style="margin-bottom:10px;">🤕 遇到了一点小障碍</h3>
-                    <p style="font-size:12px;opacity:0.8;">请尝试刷新页面</p>
-                    <div style="margin-top:15px;background:#fff0f0;padding:10px;border-radius:8px;text-align:left;font-size:10px;border:1px solid #ffcdcd;word-break:break-all;">
-                        ${message}
-                    </div>
-                </div>`;
+            // 只有当 root 是空的时候（说明页面崩了）才显示错误
+            if (root && root.innerHTML.trim() === "") {
+                root.innerHTML = `
+                    <div style="padding:20px;color:#E53935;text-align:center;font-family:sans-serif;">
+                        <h3 style="margin-bottom:10px;">🤕 遇到了一点小障碍</h3>
+                        <p style="font-size:12px;opacity:0.8;">请尝试刷新页面</p>
+                        <div style="margin-top:15px;background:#fff0f0;padding:10px;border-radius:8px;text-align:left;font-size:10px;border:1px solid #ffcdcd;word-break:break-all;">
+                            ${message}
+                        </div>
+                    </div>`;
+            }
         };
     </script>
 
     <!-- 引入主逻辑 -->
     <script type="text/babel" src="app.js"></script>
+
+    <!-- 启动 Service Worker (本地记忆库) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // 注册 sw.js，赋予 App 离线能力和秒开速度
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('Deonysus: 记忆库已就绪', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('Deonysus: 记忆库加载失败', error);
+                    });
+            });
+        }
+    </script>
 </body>
 </html>
-
